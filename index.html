@@ -56,7 +56,7 @@ h1{font-family:var(--display);font-weight:700;font-size:21px;margin:0;letter-spa
 .seg button[aria-pressed="true"]{background:var(--gold);color:var(--gold-ink);box-shadow:none}
 .reset[disabled]{opacity:.45;cursor:default}
 /* Sheet tabs along the bottom edge, like a workbook: the active tab hangs down from the felt */
-.tabs{flex:none;display:flex;gap:3px;padding:0 10px calc(8px + env(safe-area-inset-bottom,0px));
+.tabs{flex:none;display:flex;gap:3px;padding:0 10px max(6px, calc(env(safe-area-inset-bottom,0px) - 12px));
   background:var(--felt-deep);box-shadow:inset 0 1px 0 rgba(217,180,95,.35)}
 .tabs button{flex:1;border:0;background:rgba(255,255,255,.04);padding:9px 0 10px;border-radius:0 0 9px 9px;
   font-weight:600;font-size:13.5px;color:var(--muted);box-shadow:inset 0 -1px 0 var(--line),inset 1px 0 0 var(--line),inset -1px 0 0 var(--line)}
@@ -74,7 +74,11 @@ main{flex:1;min-height:0;display:flex;flex-direction:column}
 .focus button{border:0;background:transparent;font-size:12px;font-weight:600;color:var(--muted);padding:5px 9px;border-radius:6px}
 .focus button[aria-pressed="true"]{background:var(--felt-hi);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
 
-.table{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:space-around;align-items:center;padding:8px 16px;position:relative}
+.table{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:space-around;align-items:center;padding:6px 16px;position:relative;
+  container-type:size}
+/* Cards scale with the height the table actually gets, so the seats never spill onto the prompt below */
+.table .seat{--cw:clamp(34px, calc((100cqh - 165px) / 2.8), 66px)}
+.table .hands.multi{--cw:clamp(30px, calc((100cqh - 165px) / 2.8 * .82), 54px)}
 .seat{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
 .label{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .arc{font-family:var(--display);font-size:12px;letter-spacing:.18em;color:var(--gold);opacity:.75;text-align:center;
@@ -119,7 +123,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column}
 .hintbtn[disabled]{opacity:.4;cursor:default}
 .hintbtn .dots{display:flex;gap:3px}.hintbtn .dots i{width:6px;height:6px;border-radius:50%;background:rgba(217,180,95,.3)}
 .hintbtn .dots i.on{background:var(--gold)}
-.hintbox{width:100%;background:rgba(0,0,0,.3);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:7px;font-size:13.5px;line-height:1.45}
+.hintbox{width:100%;max-height:118px;overflow-y:auto;background:rgba(0,0,0,.3);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:7px;font-size:13.5px;line-height:1.45}
 .hintbox p{margin:0;display:flex;gap:8px}
 .hintbox p b.lv{flex:none;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold-ink);background:var(--gold);border-radius:4px;padding:2px 5px;height:fit-content;margin-top:2px}
 .diff{font-weight:700}
@@ -217,7 +221,7 @@ h3{font-family:var(--display);font-size:18px;margin:0 0 6px}
 .toast{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);z-index:7;background:var(--good);color:#06210f;font-weight:700;
   padding:10px 18px;border-radius:999px;font-size:15px;animation:pop .9s ease-out both;pointer-events:none}
 @keyframes pop{0%{opacity:0;transform:translate(-50%,-30%)}20%{opacity:1;transform:translate(-50%,-50%)}80%{opacity:1}100%{opacity:0}}
-@media (max-width:370px){:root{--cw:58px}.hands.multi{--cw:48px}}
+@media (max-width:370px){.table .seat{--cw:clamp(34px, calc((100cqh - 165px) / 2.8), 58px)}.table .hands.multi{--cw:clamp(30px, calc((100cqh - 165px) / 2.8 * .82), 48px)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 /* Page reset (stands in for the wrapper the Claude artifact viewer adds) */
@@ -293,6 +297,15 @@ button,input,label{touch-action:manipulation}
 <div id="sheetHost"></div>
 
 <script>
+/* iOS Home Screen apps with a translucent status bar report a viewport shorter than the screen,
+   which leaves a blank band at the bottom. In that mode, size the page to the real screen. */
+(function fitStandalone(){
+  if(!window.navigator.standalone)return;
+  const fit=()=>{const portrait=window.matchMedia('(orientation: portrait)').matches;
+    const h=portrait?Math.max(screen.width,screen.height):Math.min(screen.width,screen.height);
+    document.documentElement.style.height=h+'px';};
+  fit();window.addEventListener('resize',fit);window.addEventListener('orientationchange',()=>setTimeout(fit,150));
+})();
 /* ===== ENGINE START ===== */
 /* Rules. DEFAULT_RULES is the "restore defaults" setup: 6 decks, dealer hits soft 17,
    double after split, late surrender, double on any two cards. */

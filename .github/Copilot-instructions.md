@@ -1,4 +1,4 @@
-#Copilot instructions: Basic Strategy Coach
+# Copilot instructions: Basic Strategy Coach
 
 A personal blackjack basic-strategy trainer. It is one self-contained `index.html` served by GitHub Pages and used mostly on an iPhone from the Home Screen. Read `README.md` for features and how the grading math works.
 
@@ -12,11 +12,12 @@ A personal blackjack basic-strategy trainer. It is one self-contained `index.htm
 
 The engine sits between the `ENGINE START` and `ENGINE END` comments.
 
-- **The chart is the source of truth for the correct play.** `hardCode`, `softCode` and `pairCode` encode standard 6-deck, H17, DAS, late-surrender basic strategy. Never change a chart cell to match the EV numbers, and never change one for any reason without a published chart to cite for these rules.
+- **The chart is the source of truth for the correct play.** `hardCode`, `softCode` and `pairCode` encode standard 6-deck basic strategy and adjust it for the selected rules in `R`. Never change a chart cell to match the EV numbers, and never change one for any reason without a published chart to cite for those rules.
+- **Rules:** `DEFAULT_RULES` (H17, double after split, late surrender, double on any two cards) is what **Restore defaults** returns to. Never change the defaults without being asked. `setRules()` must be used to change rules, because it clears the cached dealer and EV tables. The Rules tab (`RULE_OPTS`, `renderRules`, `applyRules`) is the only UI that changes them.
 - **The EV numbers only measure the cost of a mistake.** They use an infinite-deck approximation, conditioned on the dealer having peeked and not having blackjack. Small disagreements with the chart on near-tie hands (for example 16 vs. 10) are expected and are not bugs.
 - **Chart codes:** `H` hit, `S` stand, `Dh` double (else hit), `Ds` double (else stand), `P` split, `Rh`/`Rs`/`Rp` surrender (else hit/stand/split). `pairCode` returns `null` when a pair is played as its total, which is always the case for 5s and 10s.
-- **Fallbacks:** doubling and surrender are only allowed on the first two cards. Surrender is not allowed after a split. Doubling after a split is allowed. Split aces get one card each and no further decisions. There is no re-splitting. `decide()` applies these rules, so keep them in one place.
-- **Dealer rule:** the dealer hits soft 17. This is set in `dealerFrom` and in `finishHand`, and the two must stay in agreement.
+- **Fallbacks:** doubling and surrender are only allowed on the first two cards, and only when the rules allow them. Surrender is never allowed after a split. Doubling after a split follows `R.das`, and doubling restrictions follow `canDoubleTotal()`. Split aces get one card each and no further decisions. There is no re-splitting. `decide()` applies these rules, so keep them in one place.
+- **Dealer rule:** whether the dealer hits soft 17 follows `R.s17`. It is applied in `dealerFrom` (the math) and in `finishHand` (the dealer's actual draws), and the two must stay in agreement.
 
 ## Feedback and hints
 
@@ -27,7 +28,7 @@ The engine sits between the `ENGINE START` and `ENGINE END` comments.
 
 ## Data
 
-Stats live in `localStorage` under the keys `bsc-stats` and `bsc-settings`. Every read and write goes through the `store` helper, which wraps them in try/catch. Nothing is ever sent over the network. If you change the stats structure, keep old saved data loading without errors.
+Stats live in `localStorage` under the key `bsc-stats`, and settings, including the selected rules, under `bsc-settings`. Every read and write goes through the `store` helper, which wraps them in try/catch. Nothing is ever sent over the network. If you change the stats structure, keep old saved data loading without errors.
 
 ## Style
 
@@ -38,9 +39,10 @@ Stats live in `localStorage` under the keys `bsc-stats` and `bsc-settings`. Ever
 ## After any change
 
 1. Open `index.html` in a browser and confirm there are no console errors.
-2. If you touched the engine, spot-check these values on the details sheet (dollars per $100 bet):
-   - 16 vs. 10: hit and stand both about â$54
-   - 12 vs. 6: stand about â$12.1, hit about â$17.2
-   - 12 vs. 2: hit about â$25.4, stand about â$28.7
+2. If you touched the engine, spot-check these values on the details sheet with the default rules (dollars per $100 bet):
+   - 16 vs. 10: hit and stand both about −$54
+   - 12 vs. 6: stand about −$12.1, hit about −$17.2
+   - 12 vs. 2: hit about −$25.4, stand about −$28.7
    - 11 vs. A: double and hit both about +$10.3
 3. Play a hand of each kind: hard, soft, a pair you split, a double, and a surrender.
+4. If you touched the rules, flip each setting on the Rules tab and confirm the chart changes, then tap **Restore defaults**.

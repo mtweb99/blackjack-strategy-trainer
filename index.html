@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Strategy Coach">
+<meta name="theme-color" content="#08261d">
+<meta name="description" content="Blackjack basic strategy trainer: deals hands, grades each decision, and explains why.">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="apple-touch-icon.png">
+<title>Basic Strategy Coach</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Bodoni:wght@500;700&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one-screen casino table — header + tabs, felt table that fills the middle, action rail pinned to the bottom, feedback as a bottom sheet. Deliberately single dark "felt" theme. */
+:root{
+  --felt:#0f3d2f; --felt-hi:#16523f; --felt-deep:#08261d;
+  --rail:#2a1a10; --ink:#f4eedd; --muted:#a8c2b5; --line:rgba(244,238,221,.14);
+  --gold:#d9b45f; --gold-ink:#2a1d05;
+  --card:#fbf8ef; --card-edge:#d9d2bf; --suit-red:#b8261f; --suit-black:#1c1c1c;
+  --sheet:#132a22; --sheet-hi:#1b382d;
+  --good:#53b877; --close:#e6bf45; --warn:#ec8d3c; --bad:#e2533f;
+  --c-hit:#e07b6a; --c-stand:#e6c35a; --c-double:#5fbf7f; --c-split:#62a3e0; --c-surr:#b393d6;
+  --display:"Libre Bodoni", "Bodoni 72", Didot, Georgia, serif;
+  --ui:"Figtree", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --cw:66px;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--felt-deep);color:var(--ink);font-family:var(--ui);font-size:15px;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.app{height:100%;display:flex;flex-direction:column;max-width:620px;margin:0 auto;
+  background:radial-gradient(120% 70% at 50% 35%, var(--felt-hi), var(--felt) 55%, var(--felt-deep));}
+
+/* Header */
+.top{padding:12px 16px 0;display:flex;flex-direction:column;gap:10px}
+.brand{display:flex;align-items:center;gap:10px}
+.chip21{width:38px;height:38px;border-radius:50%;flex:none;display:grid;place-items:center;
+  font-family:var(--display);font-weight:700;font-size:16px;color:var(--gold-ink);
+  background:repeating-conic-gradient(var(--gold) 0 20deg, var(--ink) 20deg 40deg);
+  box-shadow:inset 0 0 0 5px var(--gold),0 2px 6px rgba(0,0,0,.4)}
+.chip21 span{background:var(--gold);border-radius:50%;width:24px;height:24px;display:grid;place-items:center}
+h1{font-family:var(--display);font-weight:700;font-size:21px;margin:0;letter-spacing:.01em;line-height:1.1}
+.rules{margin:2px 0 0;font-size:11.5px;color:var(--muted);letter-spacing:.04em}
+.tabs{display:flex;gap:4px;background:rgba(0,0,0,.25);border-radius:10px;padding:3px}
+.tabs button{flex:1;border:0;background:transparent;padding:7px 0;border-radius:8px;font-weight:600;font-size:13.5px;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--gold);color:var(--gold-ink)}
+
+main{flex:1;min-height:0;display:flex;flex-direction:column}
+.view{flex:1;min-height:0;display:flex;flex-direction:column}
+
+/* Train */
+.scorebar{display:flex;align-items:center;gap:8px;padding:10px 16px 0;flex-wrap:wrap}
+.stat{font-size:12px;color:var(--muted);display:flex;gap:4px;align-items:baseline}
+.stat b{font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums;font-weight:700}
+.focus{margin-left:auto;display:flex;background:rgba(0,0,0,.25);border-radius:8px;padding:2px}
+.focus button{border:0;background:transparent;font-size:12px;font-weight:600;color:var(--muted);padding:5px 9px;border-radius:6px}
+.focus button[aria-pressed="true"]{background:var(--felt-hi);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+
+.table{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:space-around;align-items:center;padding:8px 16px;position:relative}
+.seat{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
+.label{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.arc{font-family:var(--display);font-size:12px;letter-spacing:.18em;color:var(--gold);opacity:.75;text-align:center;
+  border-top:1px solid rgba(217,180,95,.35);border-bottom:1px solid rgba(217,180,95,.35);padding:5px 14px;border-radius:50%/ 60%}
+.cards{display:flex;justify-content:center;min-height:calc(var(--cw)*1.4)}
+.card{width:var(--cw);aspect-ratio:5/7;max-width:100%;border-radius:calc(var(--cw)*.1);background:var(--card);
+  box-shadow:0 0 0 1px var(--card-edge),0 4px 10px rgba(0,0,0,.35);position:relative;font-family:var(--display);
+  animation:deal .28s ease-out both}
+.card+.card{margin-left:calc(var(--cw)*-.42)}
+.card.red{color:var(--suit-red)} .card.black{color:var(--suit-black)}
+.card .cr{position:absolute;top:5%;left:9%;font-size:calc(var(--cw)*.3);font-weight:700;line-height:1;display:flex;flex-direction:column;align-items:center}
+.card .cr small{font-size:calc(var(--cw)*.24);font-family:var(--ui)}
+.card .pip{position:absolute;inset:0;display:grid;place-items:center;font-size:calc(var(--cw)*.55);padding-top:18%;padding-left:12%}
+.card.back{background:var(--card);}
+.card.back::after{content:"";position:absolute;inset:8%;border-radius:calc(var(--cw)*.06);
+  background:repeating-linear-gradient(45deg,var(--suit-red) 0 4px,#8f1c17 4px 8px);box-shadow:inset 0 0 0 2px var(--card)}
+@keyframes deal{from{transform:translateY(-18px) rotate(-3deg);opacity:.2}to{transform:none;opacity:1}}
+.total{font-size:13px;font-weight:700;background:rgba(0,0,0,.35);padding:3px 10px;border-radius:999px;font-variant-numeric:tabular-nums;min-height:1.6em}
+.hands{display:flex;justify-content:center;gap:14px;width:100%;flex-wrap:wrap}
+.hand{display:flex;flex-direction:column;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;border:1px solid transparent;min-width:0}
+.hands.multi{--cw:54px}
+.hand.active{border-color:var(--gold);background:rgba(217,180,95,.07)}
+.hand .outcome{font-size:12.5px;font-weight:700;padding:2px 9px;border-radius:999px}
+.o-win{background:var(--good);color:#06210f}.o-lose{background:var(--bad);color:#2a0702}.o-push{background:var(--muted);color:#0b1f17}.o-surr{background:var(--c-surr);color:#1d0d2c}
+
+.prompt{text-align:center;padding:4px 16px 8px;font-size:14px;color:var(--muted);min-height:2.4em;text-wrap:balance}
+.prompt strong{color:var(--ink);font-size:16px}
+.fbwrap{padding:0 16px 6px;min-height:60px;display:flex}
+.fb{flex:1;min-width:0;display:flex;align-items:center;gap:10px;border:0;text-align:left;border-radius:12px;padding:8px 10px;
+  background:color-mix(in srgb, var(--sev) 18%, rgba(0,0,0,.35));box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--sev) 45%, transparent);
+  animation:fbin .25s ease-out both}
+.fb.empty{background:rgba(0,0,0,.2);box-shadow:none;color:var(--muted);font-size:13px;justify-content:center;text-align:center;animation:none}
+.fbi{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--sev);color:#111;font-weight:800;font-size:16px}
+.fbt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.fbt b{font-size:14.5px}
+.fbt small{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fbm{flex:none;font-size:12.5px;font-weight:700;color:var(--gold)}
+@keyframes fbin{from{transform:scale(.97);opacity:.4}to{transform:none;opacity:1}}
+.hintwrap{padding:0 16px 4px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.hintbtn{border:0;background:rgba(0,0,0,.28);box-shadow:inset 0 0 0 1px rgba(217,180,95,.5);color:var(--gold);font-weight:700;font-size:13px;
+  padding:6px 14px;border-radius:999px;display:flex;align-items:center;gap:6px}
+.hintbtn[disabled]{opacity:.4;cursor:default}
+.hintbtn .dots{display:flex;gap:3px}.hintbtn .dots i{width:6px;height:6px;border-radius:50%;background:rgba(217,180,95,.3)}
+.hintbtn .dots i.on{background:var(--gold)}
+.hintbox{width:100%;background:rgba(0,0,0,.3);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:7px;font-size:13.5px;line-height:1.45}
+.hintbox p{margin:0;display:flex;gap:8px}
+.hintbox p b.lv{flex:none;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold-ink);background:var(--gold);border-radius:4px;padding:2px 5px;height:fit-content;margin-top:2px}
+.diff{font-weight:700}
+.actions{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:10px 16px calc(14px + env(safe-area-inset-bottom,0px));
+  background:linear-gradient(to bottom, transparent, rgba(0,0,0,.35));}
+.act{grid-column:span 2;border:0;border-radius:12px;padding:13px 4px;font-weight:700;font-size:15px;color:#141414;
+  box-shadow:0 3px 0 rgba(0,0,0,.35);transition:transform .08s}
+.act:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.35)}
+.act.big{grid-column:span 3;font-size:17px;padding:15px 4px}
+.act[disabled]{opacity:.22;box-shadow:none;cursor:default}
+.a-hit{background:var(--c-hit)}.a-stand{background:var(--c-stand)}.a-double{background:var(--c-double)}.a-split{background:var(--c-split)}.a-surrender{background:var(--c-surr)}
+.act.next{grid-column:1/-1;background:var(--gold);color:var(--gold-ink);font-size:17px}
+.banner{font-family:var(--display);font-size:22px;font-weight:700;text-align:center}
+
+/* Sheet */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:5}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:6;max-width:620px;margin:0 auto;max-height:82%;display:flex;flex-direction:column;
+  background:var(--sheet);border-radius:18px 18px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.5);border-top:5px solid var(--sev,var(--good));
+  animation:rise .22s ease-out both}
+@keyframes rise{from{transform:translateY(30px)}to{transform:none}}
+.sheet-body{overflow-y:auto;padding:16px 16px 8px;display:flex;flex-direction:column;gap:14px}
+.verdict{display:flex;align-items:center;gap:12px}
+.vbadge{width:42px;height:42px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:22px;font-weight:700;background:var(--sev);color:#111}
+.verdict h2{font-family:var(--display);margin:0;font-size:23px;line-height:1.1;text-wrap:balance}
+.verdict p{margin:2px 0 0;color:var(--muted);font-size:13.5px}
+.gauge{display:flex;flex-direction:column;gap:5px}
+.gauge-track{position:relative;height:10px;border-radius:999px;
+  background:linear-gradient(to right,var(--good) 0 8%,var(--close) 8% 30%,var(--warn) 30% 62%,var(--bad) 62%)}
+.gauge-mark{position:absolute;top:-5px;width:4px;height:20px;border-radius:2px;background:var(--ink);box-shadow:0 0 0 2px var(--sheet);transform:translateX(-50%)}
+.gauge-ticks{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);letter-spacing:.03em}
+.cost{font-size:14px}
+.cost b{font-variant-numeric:tabular-nums}
+.sect{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 6px}
+.evs{display:flex;flex-direction:column;gap:6px}
+.evrow{display:grid;grid-template-columns:78px 1fr 64px;align-items:center;gap:8px;font-size:13px}
+.evrow .nm{font-weight:600;display:flex;gap:4px;align-items:center}
+.evbar{position:relative;height:16px;background:rgba(255,255,255,.05);border-radius:4px}
+.evbar::before{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--line)}
+.evbar i{position:absolute;top:2px;bottom:2px;border-radius:3px}
+.evrow .v{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.tag{font-size:9.5px;font-weight:700;letter-spacing:.06em;padding:1px 5px;border-radius:4px;text-transform:uppercase}
+.tag.best{background:var(--good);color:#06210f}.tag.you{background:var(--ink);color:#111}
+.why{background:var(--sheet-hi);border-radius:12px;padding:12px 14px;font-size:14.5px;line-height:1.5}
+.why p{margin:0}.why p+p{margin-top:8px}
+.note{font-size:12px;color:var(--muted);line-height:1.45}
+.sheet-actions{display:flex;gap:8px;padding:10px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
+.sheet-actions button{flex:1;border:0;border-radius:12px;padding:13px 6px;font-weight:700;font-size:15px}
+.btn-primary{background:var(--gold);color:var(--gold-ink)}
+.btn-ghost{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
+
+/* Chart */
+.scroll{flex:1;min-height:0;overflow-y:auto;padding:14px 16px calc(24px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:18px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:5px}
+.legend i{width:14px;height:14px;border-radius:3px;display:inline-block}
+.tblwrap{overflow-x:auto}
+table.chart{border-collapse:separate;border-spacing:2px;width:100%;font-variant-numeric:tabular-nums}
+.chart th{font-size:11px;color:var(--muted);font-weight:600;padding:3px 0}
+.chart th.row{text-align:right;padding-right:6px;white-space:nowrap;color:var(--ink)}
+.chart td{text-align:center;font-size:11.5px;font-weight:700;color:#141414;padding:5px 0;border-radius:3px;position:relative;min-width:24px}
+.chart td.miss::after{content:attr(data-miss);position:absolute;top:-4px;right:-3px;background:var(--bad);color:#fff;font-size:9px;
+  min-width:13px;height:13px;border-radius:7px;display:grid;place-items:center;padding:0 2px;box-shadow:0 0 0 1px var(--felt)}
+.k-H{background:var(--c-hit)}.k-S{background:var(--c-stand)}.k-D{background:var(--c-double)}.k-P{background:var(--c-split)}.k-R{background:var(--c-surr)}
+h3{font-family:var(--display);font-size:18px;margin:0 0 6px}
+.dealerhead{font-size:11px;color:var(--muted);text-align:center;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px}
+
+/* Stats */
+.cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tile{background:rgba(0,0,0,.25);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.tile b{font-size:22px;font-variant-numeric:tabular-nums}
+.tile span{font-size:11.5px;color:var(--muted)}
+.cat{display:grid;grid-template-columns:70px 1fr 74px;gap:8px;align-items:center;font-size:13.5px}
+.meter{height:8px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--good)}
+.cat .n{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;font-size:12.5px}
+.misslist{display:flex;flex-direction:column;gap:6px}
+.miss-item{display:flex;justify-content:space-between;gap:10px;background:rgba(0,0,0,.2);border-radius:10px;padding:8px 12px;font-size:13.5px}
+.miss-item span:last-child{color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.setting{display:flex;justify-content:space-between;align-items:center;gap:12px;background:rgba(0,0,0,.2);border-radius:12px;padding:12px 14px;font-size:14px}
+.setting small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.setting input{width:22px;height:22px;accent-color:var(--gold)}
+.reset{border:0;background:transparent;box-shadow:inset 0 0 0 1px var(--line);border-radius:10px;padding:10px;color:var(--muted);font-weight:600}
+.reset.armed{box-shadow:inset 0 0 0 1px var(--bad);color:var(--bad)}
+.empty{color:var(--muted);font-size:13.5px}
+.toast{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);z-index:7;background:var(--good);color:#06210f;font-weight:700;
+  padding:10px 18px;border-radius:999px;font-size:15px;animation:pop .9s ease-out both;pointer-events:none}
+@keyframes pop{0%{opacity:0;transform:translate(-50%,-30%)}20%{opacity:1;transform:translate(-50%,-50%)}80%{opacity:1}100%{opacity:0}}
+@media (max-width:370px){:root{--cw:58px}.hands.multi{--cw:48px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* Page reset (stands in for the wrapper the Claude artifact viewer adds) */
+html{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);-webkit-text-size-adjust:100%}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+button,input,label{touch-action:manipulation}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <div class="chip21" aria-hidden="true"><span>21</span></div>
+      <div>
+        <h1>Basic Strategy Coach</h1>
+        <p class="rules">6 DECKS · DEALER HITS SOFT 17 · DAS · LATE SURRENDER</p>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button id="tab-train" role="tab" aria-selected="true" data-view="train">Train</button>
+      <button id="tab-chart" role="tab" aria-selected="false" data-view="chart">Chart</button>
+      <button id="tab-stats" role="tab" aria-selected="false" data-view="stats">Stats</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="view" id="view-train">
+      <div class="scorebar">
+        <div class="stat">Accuracy <b id="sAcc">–</b></div>
+        <div class="stat">Streak <b id="sStreak">0</b></div>
+        <div class="focus" role="group" aria-label="Which hands to deal">
+          <button id="f-real" data-focus="real" aria-pressed="false">Real deals</button>
+          <button id="f-tough" data-focus="tough" aria-pressed="true">Tough spots</button>
+        </div>
+      </div>
+      <div class="table">
+        <div class="seat">
+          <div class="label">Dealer</div>
+          <div class="cards" id="dealerCards"></div>
+          <div class="total" id="dealerTotal"></div>
+        </div>
+        <div class="arc">BLACKJACK PAYS 3 TO 2</div>
+        <div class="seat">
+          <div class="hands" id="playerHands"></div>
+          <div class="label">You</div>
+        </div>
+      </div>
+      <div class="fbwrap" id="fb"></div>
+      <div class="prompt" id="prompt"></div>
+      <div class="hintwrap" id="hintWrap"></div>
+      <div class="actions" id="actions"></div>
+    </section>
+
+    <section class="view" id="view-chart" hidden>
+      <div class="scroll" id="chartScroll"></div>
+    </section>
+
+    <section class="view" id="view-stats" hidden>
+      <div class="scroll" id="statsScroll"></div>
+    </section>
+  </main>
+</div>
+<div id="sheetHost"></div>
+
+<script>
+/* ===== ENGINE START ===== */
+const VALS=[2,3,4,5,6,7,8,9,10,11];
+const PR=c=>c===10?4/13:1/13;
+function add(t,s,c){t+=c;if(c===11)s++;while(t>21&&s>0){t-=10;s--;}return [t,s];}
+const dMemo={};
+function dealerFrom(t,s){
+  const k=t+'|'+s; if(dMemo[k])return dMemo[k];
+  const out=[0,0,0,0,0,0];
+  if(t>21)out[5]=1;
+  else if(t>=18||(t===17&&s===0))out[t-17]=1;      // dealer hits soft 17
+  else for(const c of VALS){const[nt,ns]=add(t,s,c);const d=dealerFrom(nt,ns);for(let i=0;i<6;i++)out[i]+=PR(c)*d[i];}
+  return dMemo[k]=out;
+}
+function dealerDist(up){ // conditioned on dealer having peeked and not having blackjack
+  const out=[0,0,0,0,0,0];let tot=0;
+  for(const h of VALS){
+    if((up===11&&h===10)||(up===10&&h===11))continue;
+    const p=PR(h);tot+=p;const[t,s]=add(up,up===11?1:0,h);const d=dealerFrom(t,s);
+    for(let i=0;i<6;i++)out[i]+=p*d[i];
+  }
+  return out.map(x=>x/tot);
+}
+const evalCache={};
+function evalFor(up){
+  if(evalCache[up])return evalCache[up];
+  const d=dealerDist(up);
+  const standEV=t=>{if(t>21)return -1;let ev=d[5];for(let i=0;i<5;i++){const dt=17+i;ev+=t>dt?d[i]:t<dt?-d[i]:0;}return ev;};
+  const vm={},hm={};
+  function V(t,s){if(t>21)return -1;const k=t+'|'+s;if(k in vm)return vm[k];return vm[k]=Math.max(standEV(t),hitEV(t,s));}
+  function hitEV(t,s){const k=t+'|'+s;if(k in hm)return hm[k];let ev=0;for(const c of VALS){const[nt,ns]=add(t,s,c);ev+=PR(c)*V(nt,ns);}return hm[k]=ev;}
+  function dblEV(t,s){let ev=0;for(const c of VALS){const[nt,ns]=add(t,s,c);ev+=PR(c)*standEV(nt);}return 2*ev;}
+  function splitEV(x){let ev=0;for(const c of VALS){const[t,s]=add(x,x===11?1:0,c);ev+=PR(c)*(x===11?standEV(t):Math.max(V(t,s),dblEV(t,s)));}return 2*ev;}
+  return evalCache[up]={d,standEV,hitEV,dblEV,splitEV};
+}
+
+/* Chart: 6 decks, H17, DAS, late surrender */
+function hardCode(t,u){
+  if(t<=8)return 'H';
+  if(t===9)return u>=3&&u<=6?'Dh':'H';
+  if(t===10)return u<=9?'Dh':'H';
+  if(t===11)return 'Dh';
+  if(t===12)return u>=4&&u<=6?'S':'H';
+  if(t<=14)return u<=6?'S':'H';
+  if(t===15)return u<=6?'S':u>=10?'Rh':'H';
+  if(t===16)return u<=6?'S':u>=9?'Rh':'H';
+  if(t===17)return u===11?'Rs':'S';
+  return 'S';
+}
+function softCode(t,u){
+  if(t<=12)return 'H';
+  if(t<=14)return u===5||u===6?'Dh':'H';
+  if(t<=16)return u>=4&&u<=6?'Dh':'H';
+  if(t===17)return u>=3&&u<=6?'Dh':'H';
+  if(t===18)return u<=6?'Ds':u<=8?'S':'H';
+  if(t===19)return u===6?'Ds':'S';
+  return 'S';
+}
+function pairCode(x,u){ // returns 'P','Rp' or null (= play as a total)
+  switch(x){
+    case 2:case 3:case 7:return u<=7?'P':null;
+    case 4:return u===5||u===6?'P':null;
+    case 6:return u<=6?'P':null;
+    case 8:return u===11?'Rp':'P';
+    case 9:return (u===7||u===10||u===11)?null:'P';
+    case 11:return 'P';
+    default:return null; // 5s and 10s never split
+  }
+}
+/* ===== ENGINE END ===== */
+
+const RANKS=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+const SUITS=['♠','♥','♦','♣'];
+const val=r=>r==='A'?11:(r==='10'||r==='J'||r==='Q'||r==='K')?10:+r;
+const rnd=n=>Math.random()*n|0;
+const randCard=()=>({r:RANKS[rnd(13)],s:SUITS[rnd(4)]});
+const cardOf=v=>({r:v===11?'A':v===10?['10','J','Q','K'][rnd(4)]:String(v),s:SUITS[rnd(4)]});
+function hv(cards){let t=0,a=0;for(const c of cards){const v=val(c.r);t+=v;if(v===11)a++;}while(t>21&&a>0){t-=10;a--;}return{t,soft:a>0};}
+const upName=u=>u===11?'an ace':u===8?'an 8':'a '+u;
+const upShort=u=>u===11?'A':String(u);
+const money=ev=>{const x=ev*100;return (x<0?'−':'+')+'$'+Math.abs(x).toFixed(Math.abs(x)<10?2:1);};
+const ACT_NAMES={hit:'Hit',stand:'Stand',double:'Double',split:'Split',surrender:'Surrender'};
+
+function decide(hand,up){
+  const{t,soft}=hv(hand.cards);const s=soft?1:0;
+  const two=hand.cards.length===2;
+  const x0=val(hand.cards[0].r);
+  const avail={hit:true,stand:true,double:two,split:two&&!hand.fromSplit&&x0===val(hand.cards[1].r),surrender:two&&!hand.fromSplit};
+  let code=avail.split?pairCode(x0,up):null;
+  const totalCode=soft?softCode(t,up):hardCode(t,up);
+  if(!code)code=totalCode;
+  let best,fallback=null;
+  if(code==='P')best='split';
+  else if(code[0]==='R'){if(avail.surrender)best='surrender';else{best={h:'hit',s:'stand',p:'split'}[code[1]];fallback='surrender';}}
+  else if(code[0]==='D'){if(avail.double)best='double';else{best=code[1]==='h'?'hit':'stand';fallback='double';}}
+  else best=code==='H'?'hit':'stand';
+  const E=evalFor(up);
+  const evs={hit:E.hitEV(t,s),stand:E.standEV(t)};
+  if(avail.double)evs.double=E.dblEV(t,s);
+  if(avail.split)evs.split=E.splitEV(x0);
+  if(avail.surrender)evs.surrender=-0.5;
+  const kind=avail.split?'pair':soft?'soft':'hard';
+  let cell;
+  if(avail.split)cell=`pair-${x0}-${up}`;
+  else if(soft&&t>=13&&t<=20)cell=`soft-${t}-${up}`;
+  else if(!soft)cell=`hard-${t<=8?8:t>=18?18:t}-${up}`;
+  return{t,soft,two,x0,avail,code,best,fallback,evs,kind,cell,up,bust:E.d[5]};
+}
+
+function handLabel(dec){
+  if(dec.kind==='pair'){const n=dec.x0===11?'A':dec.x0===10?'10':dec.x0;return `Pair of ${n}s`;}
+  return (dec.soft?'Soft ':'Hard ')+dec.t;
+}
+
+function explain(dec){
+  const u=dec.up,U=upName(u),b=Math.round(dec.bust*100),t=dec.t,weak=u<=6;
+  const out=[];
+  const bustLine=`The dealer busts about ${b}% of the time with ${U} showing.`;
+  if(dec.kind==='pair'){
+    const x=dec.x0;
+    if(x===11)out.push('Split aces every time. A pair of aces is a clumsy soft 12, but split, each hand starts at 11 and a ten-valued card (31% of the deck) makes 21. You only get one card on each ace, and it is still the strongest start in the game.');
+    else if(x===8)out.push(u===11?'16 is the worst total, and against an ace even split 8s are underdogs. With late surrender available, giving up half your bet loses less on average than putting two bets out against the ace.':'Split 8s every time. 16 is the worst total in blackjack, and two hands starting at 8 lose far less than one 16, even against a strong upcard.');
+    else if(x===10)out.push('Never split tens. 20 wins most of the time already. Splitting swaps a near-certain winner for two hands that each start at 10 and average less.');
+    else if(x===5)out.push('Never split 5s. Together they make 10, one of the best doubling hands. Play it as a hard 10.');
+    else if(x===9){
+      if(u===7)out.push('A dealer 7 most often finishes on 17, so your 18 is already ahead. Stand.');
+      else if(u>=10)out.push('18 is an underdog to a 10 or ace, but splitting makes two 9s that do even worse against that card. Stand.');
+      else out.push(`Two hands starting at 9 earn more than one 18 here. ${weak?bustLine:'An 8 most often makes 18, so your 18 only pushes; two 9s each improve to 19 often enough.'}`);
+    }
+    else if(x===4)out.push(dec.code==='P'?`Against a 5 or 6 the dealer is at their weakest (${b}% bust). Each 4 can draw a 5, 6 or 7 for a good double, and doubling after a split is allowed.`:'Play 4,4 as a hard 8 and hit. Two hands starting with 4 are weak and only pay off against a 5 or 6.');
+    else{ // 2,3,6,7
+      if(dec.code==='P')out.push(`Split here. ${bustLine} Splitting puts more money out while the dealer is weak, and doubling after a split lets you press a good draw.`);
+      else out.push(`Don't split against ${U}. That upcard usually makes a strong total, so splitting just puts more money behind weak starting cards. Play it as a ${dec.soft?'soft':'hard'} ${t}.`);
+    }
+    return out;
+  }
+  if(dec.soft){
+    if(t>=20)out.push(`Soft ${t} is a great hand. Stand.`);
+    else if(t===19)out.push(u===6?`Under H17 rules the dealer's 6 is weak enough (${b}% bust) that doubling soft 19 earns slightly more than standing. This one is close.`:'Soft 19 is a strong total. Stand.');
+    else if(t===18){
+      if(u<=6)out.push(`Soft 18 is decent, and the dealer is weak (${b}% bust). Doubling gets more money out with no risk of busting on one card.`);
+      else if(u<=8)out.push(`Against ${U}, your 18 beats or ties the dealer's most likely finish. Stand.`);
+      else out.push(`Soft 18 is an underdog to ${U}. Because a soft hand can't bust on one card, hitting to improve costs you very little.`);
+    }else{
+      if(dec.code[0]==='D')out.push(`${bustLine} A soft ${t} can't bust on one card and many draws make 18 to 21, so this is a cheap chance to double.`);
+      else out.push(`Soft ${t} won't win by standing. Hit; the ace drops to 1 if needed, so the next card can't bust you.`);
+    }
+  }else{
+    if(t<=8)out.push(`Nothing can bust a ${t}, and standing on it almost always loses. Always hit.`);
+    else if(t===9)out.push(dec.code==='Dh'?`${bustLine} A 9 that catches a ten makes 19, so double while the dealer is weak.`:`9 isn't strong enough to double against ${U}. Take a card.`);
+    else if(t===10)out.push(u<=9?`Any ten-valued card (31% of the deck) gives you 20. You're the favorite against ${U}, so double.`:`Against ${U} the dealer is too strong to double a 10. Hit.`);
+    else if(t===11)out.push(`11 is the best doubling hand: a ten-valued card makes 21. With the dealer hitting soft 17, you double even against an ace.`);
+    else if(t>=17){
+      if(dec.code==='Rs')out.push(`Because the dealer hits soft 17, an ace showing is strong enough that 17 loses more than half your bet on average. Surrender.`);
+      else out.push(`Stand. Hitting ${t} busts far more often than it helps.`);
+    }else{ // 12-16
+      if(dec.code[0]==='R')out.push(`This is one of the worst spots in blackjack. Even the best play loses more than half your bet on average, so surrendering for a fixed half-bet loss is cheaper.`);
+      else if(t===12&&(u===2||u===3))out.push(`The dealer busts only about ${b}% with ${U} showing. A 12 busts only on a ten-valued card (31%), so taking one card is slightly better. This is a close one.`);
+      else if(weak)out.push(`${bustLine} Your ${t} busts too often if you hit, so stand and let the dealer take the risk.`);
+      else out.push(`${U[0].toUpperCase()+U.slice(1)} usually ends on 17 or better. A stiff ${t} only wins when the dealer busts (${b}%), so you have to try to improve even though hitting can bust you.`);
+    }
+  }
+  return out;
+}
+
+/* ===== State ===== */
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}};
+const blankStats=()=>({n:0,ok:0,streak:0,best:0,cost:0,cat:{hard:[0,0],soft:[0,0],pair:[0,0]},cells:{},recent:[]});
+let stats=store.get('bsc-stats',blankStats());
+let settings=store.get('bsc-settings',{focus:'tough',pauseOnCorrect:true});
+let G=null;
+
+function genPlayer(){
+  if(settings.focus==='real'){
+    for(;;){const a=randCard(),b=randCard();const h=hv([a,b]);if(!(h.t===21))return [a,b];}
+  }
+  const r=Math.random();
+  if(r<.3){const x=2+rnd(8);return shuffle([cardOf(11),cardOf(x)]);}
+  if(r<.55){const x=VALS[rnd(10)];return [cardOf(x),cardOf(x)];}
+  const lo=r<.85?12:9,hi=r<.85?16:11;
+  for(;;){const a=2+rnd(9),b=2+rnd(9);if(a!==b&&a+b>=lo&&a+b<=hi)return [cardOf(a),cardOf(b)];}
+}
+function shuffle(a){if(Math.random()<.5)a.reverse();return a;}
+
+function newHand(){
+  const up=randCard();const u=val(up.r);
+  let hole;do{hole=randCard();}while((u===11&&val(hole.r)===10)||(u===10&&val(hole.r)===11));
+  G={up,hole,dealer:[up,hole],hands:[{cards:genPlayer(),done:false,bet:1,fromSplit:false}],active:0,phase:'decide',dec:null};
+  advance();
+}
+function advance(){
+  // find next hand needing a decision
+  while(G.active<G.hands.length){
+    const h=G.hands[G.active];
+    if(!h.done){const{t}=hv(h.cards);if(t>=21)h.done=true;}
+    if(!h.done)break;
+    G.active++;
+  }
+  if(G.active>=G.hands.length){finishHand();return;}
+  G.phase='decide';G.hint=0;G.dec=decide(G.hands[G.active],val(G.up.r));
+  render();
+}
+function apply(action){
+  const h=G.hands[G.active];
+  if(action==='hit'){h.cards.push(randCard());}
+  else if(action==='stand'){h.done=true;}
+  else if(action==='double'){h.cards.push(randCard());h.bet=2;h.done=true;}
+  else if(action==='surrender'){h.surrendered=true;h.done=true;}
+  else if(action==='split'){
+    const [a,b]=h.cards;const aces=val(a.r)===11;
+    const h1={cards:[a,randCard()],done:aces,bet:1,fromSplit:true},h2={cards:[b,randCard()],done:aces,bet:1,fromSplit:true};
+    G.hands.splice(G.active,1,h1,h2);
+  }
+  advance();
+}
+function finishHand(){
+  const live=G.hands.some(h=>!h.surrendered&&hv(h.cards).t<=21);
+  if(live){for(;;){const d=hv(G.dealer);if(d.t>17||(d.t===17&&!d.soft))break;G.dealer.push(randCard());}}
+  const dt=hv(G.dealer).t;let net=0;
+  for(const h of G.hands){
+    const t=hv(h.cards).t;
+    if(h.surrendered){h.result='surr';h.net=-.5;}
+    else if(t>21){h.result='lose';h.net=-h.bet;}
+    else if(dt>21||t>dt){h.result='win';h.net=h.bet;}
+    else if(t<dt){h.result='lose';h.net=-h.bet;}
+    else{h.result='push';h.net=0;}
+    net+=h.net;
+  }
+  G.net=net;G.phase='result';render();
+}
+
+function choose(action){
+  if(G.phase!=='decide')return;
+  const dec=G.dec;const ok=action===dec.best;
+  const loss=ok?0:Math.max(0,dec.evs[dec.best]-dec.evs[action]);
+  record(dec,action,ok,loss,G.hint>0);
+  LAST={dec,action,ok,loss,hints:G.hint};
+  apply(action);
+}
+let LAST=null;
+function marginOf(dec){const o=Object.entries(dec.evs).filter(([k])=>k!==dec.best).map(([,v])=>v);return dec.evs[dec.best]-Math.max(...o);}
+function renderBanner(){
+  const el=$('fb');
+  if(!LAST){el.innerHTML='<div class="fb empty">Feedback on each move shows up here. Keep playing, or tap it for the full breakdown.</div>';return;}
+  const f=LAST,d=f.dec,v=verdictOf(f);
+  const past={hit:'hit',stand:'stood',double:'doubled',split:'split',surrender:'surrendered'}[f.action];
+  const m=marginOf(d)*100;
+  const situ=`${handLabel(d)} vs ${upShort(d.up)}`;
+  const head=f.ok?`Correct: ${ACT_NAMES[d.best]}`:`${ACT_NAMES[d.best]} was best`;
+  const sub=f.ok?`${situ} · ${m<2?'tough spot':m<10?'moderate':'easy call'}`:`${situ} · you ${past} · cost ${money(f.loss).slice(1)}/100`;
+  el.innerHTML=`<button class="fb" id="fbBtn" style="--sev:${v.sev}"><span class="fbi">${v.icon}</span><span class="fbt"><b>${head}</b><small>${sub}</small></span><span class="fbm">Details ›</span></button>`;
+  $('fbBtn').onclick=()=>showSheet(f);
+}
+function record(dec,action,ok,loss,hinted){
+  stats.n++;if(ok){stats.ok++;if(!hinted){stats.streak++;stats.best=Math.max(stats.best,stats.streak);}}else stats.streak=0;
+  stats.cost+=loss;const c=stats.cat[dec.kind];c[0]++;if(ok)c[1]++;
+  if(!ok){
+    if(dec.cell)stats.cells[dec.cell]=(stats.cells[dec.cell]||0)+1;
+    stats.recent.unshift({h:handLabel(dec),u:upShort(dec.up),you:action,best:dec.best,loss});
+    stats.recent=stats.recent.slice(0,10);
+  }
+  store.set('bsc-stats',stats);renderScore();
+}
+
+/* ===== Rendering ===== */
+const $=id=>document.getElementById(id);
+function cardHTML(c,back){
+  if(back)return '<div class="card back" aria-label="face-down card"></div>';
+  const red=c.s==='♥'||c.s==='♦';
+  return `<div class="card ${red?'red':'black'}" aria-label="${c.r}${c.s}"><div class="cr">${c.r}<small>${c.s}</small></div><div class="pip">${c.s}</div></div>`;
+}
+function totalText(cards){const{t,soft}=hv(cards);if(t>21)return 'Bust · '+t;if(cards.length===2&&t===21)return '21';return (soft&&t<21?'Soft ':'')+t;}
+function render(){
+  renderBanner();
+  const reveal=G.phase==='result';
+  $('dealerCards').innerHTML=cardHTML(G.up)+(reveal?G.dealer.slice(1).map(c=>cardHTML(c)).join(''):cardHTML(null,true));
+  $('dealerTotal').textContent=reveal?totalText(G.dealer):'Shows '+(val(G.up.r)===11?'A':val(G.up.r));
+  const multi=G.hands.length>1;
+  $('playerHands').className='hands'+(multi?' multi':'');
+  $('playerHands').innerHTML=G.hands.map((h,i)=>{
+    const active=!reveal&&i===G.active&&multi;
+    const o=reveal?`<div class="outcome o-${h.result}">${{win:'Win',lose:'Lose',push:'Push',surr:'Surrendered'}[h.result]} ${h.net>0?'+':''}${h.net===0?'':h.net}</div>`:'';
+    return `<div class="hand${active?' active':''}"><div class="cards">${h.cards.map(c=>cardHTML(c)).join('')}</div><div class="total">${totalText(h.cards)}${h.bet===2?' · doubled':''}</div>${o}</div>`;
+  }).join('');
+  if(reveal){
+    const n=G.net;
+    $('prompt').innerHTML=`<div class="banner">${n>0?'You won '+(n)+(n===1?' unit':' units'):n<0?'You lost '+(-n)+(n===-1?' unit':' units'):'Push'}</div>`;
+  }else{
+    const d=G.dec;
+    $('prompt').innerHTML=`${multi?`Hand ${G.active+1} of ${G.hands.length} · `:''}<strong>${handLabel(d)}</strong> vs dealer ${upShort(d.up)}`;
+  }
+  renderActions();
+}
+/* Hints: three levels, none names the move */
+function hintLines(dec){
+  const ev=dec.evs,best=ev[dec.best];
+  const sorted=Object.values(ev).sort((a,b)=>b-a);
+  const margin=best-sorted[1];
+  const m=margin*100;
+  const L=[];
+  // Level 1: difficulty
+  if(m<2)L.push(`<span class="diff" style="color:var(--close)">Tough spot.</span> The two best options are within $${m.toFixed(2)} per $100 of each other.`);
+  else if(m<10)L.push(`<span class="diff" style="color:var(--warn)">Moderate.</span> One option is better by about $${m.toFixed(1)} per $100, but a wrong pick here isn't a disaster.`);
+  else L.push(`<span class="diff" style="color:var(--good)">Easy call.</span> One option beats every other by at least $${m.toFixed(0)} per $100.`);
+  // Level 2: the facts that drive the decision
+  const t=dec.t,b=Math.round(dec.bust*100);
+  let risk;
+  if(dec.soft||t<=11)risk='Your hand <b>can\'t bust</b> on the next card.';
+  else{let p=0;for(const c of VALS)if(c!==11&&t+c>21)p+=PR(c);risk=`If you take a card, <b>${Math.round(p*100)}%</b> of cards bust you.`;}
+  L.push(`With ${upName(dec.up)} showing, the dealer busts about <b>${b}%</b> of the time. ${risk}`);
+  // Level 3: a nudge plus eliminating the clearly bad options
+  let nudge;
+  const c=dec.code;
+  if(dec.fallback)nudge=`Check what's still allowed with ${dec.two?'this hand':'three or more cards'}. The chart's first choice may not be available.`;
+  else if(dec.kind==='pair'&&(c==='P'||c==='Rp'))nudge='Think about whether two hands starting with one of these cards beat the total they make together.';
+  else if(dec.kind==='pair')nudge='Think about whether this pair is better off as the total it already makes.';
+  else if(c[0]==='R')nudge='Ask what the best way to play this hand loses on average. Compare that with losing exactly half.';
+  else if(c[0]==='D')nudge='You are the favorite here. Think about how much money you want on the table.';
+  else if(c==='S'&&dec.up<=6&&t<17)nudge='Who is more likely to bust from here, you or the dealer?';
+  else if(c==='S')nudge='How often does the dealer beat the total you already have?';
+  else if(t<=11||dec.soft)nudge='What is the worst thing that can happen if you take one card?';
+  else nudge='Where does the dealer usually finish with this upcard, and does your total beat it?';
+  const bad=Object.keys(ev).filter(k=>best-ev[k]>0.10);
+  const keep=Object.keys(ev).length-bad.length;
+  if(bad.length&&keep>=2)nudge+=` You can rule out <b>${bad.map(k=>ACT_NAMES[k]).join(' and ')}</b>.`;
+  L.push(nudge);
+  return L;
+}
+function renderHint(){
+  const w=$('hintWrap');
+  if(!G||G.phase==='result'){w.innerHTML='';return;}
+  const lines=hintLines(G.dec).slice(0,G.hint);
+  const names=['Difficulty','Key facts','Nudge'];
+  const done=G.hint>=3||G.phase!=='decide';
+  const dots=[0,1,2].map(i=>`<i class="${i<G.hint?'on':''}"></i>`).join('');
+  w.innerHTML=`${lines.length?`<div class="hintbox">${lines.map((l,i)=>`<p><b class="lv">${names[i]}</b><span>${l}</span></p>`).join('')}</div>`:''}
+    <button class="hintbtn" id="hintBtn" ${done?'disabled':''}>${G.hint===0?'Hint':G.hint<3?'Another hint':'No more hints'} <span class="dots">${dots}</span></button>`;
+  $('hintBtn').onclick=()=>{if(G.phase!=='decide'||G.hint>=3)return;G.hint++;renderHint();};
+}
+function renderActions(){
+  renderHint();
+  const el=$('actions');
+  if(G.phase==='result'){el.innerHTML='<button class="act next" id="nextBtn">Deal next hand</button>';$('nextBtn').onclick=newHand;return;}
+  const a=G.dec.avail,dis=G.phase!=='decide';
+  el.innerHTML=['hit','stand','double','split','surrender'].map(k=>
+    `<button class="act a-${k}${k==='hit'||k==='stand'?' big':''}" data-a="${k}" ${!a[k]||dis?'disabled':''}>${ACT_NAMES[k]}</button>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>choose(b.dataset.a));
+}
+function renderScore(){
+  $('sAcc').textContent=stats.n?Math.round(100*stats.ok/stats.n)+'%':'–';
+  $('sStreak').textContent=stats.streak;
+}
+
+function gaugePos(loss){const x=loss*100;
+  if(x<=.25)return x/.25*8; if(x<=2)return 8+(x-.25)/1.75*22; if(x<=10)return 30+(x-2)/8*32; return Math.min(100,62+(x-10)/15*38);}
+function verdictOf(fb){
+  const{dec,action,ok,loss}=fb;
+  let sev,title,sub,icon;
+  const others=Object.entries(dec.evs).filter(([k])=>k!==dec.best).map(([,v])=>v);
+  const margin=dec.evs[dec.best]-Math.max(...others);
+  if(ok){
+    sev='var(--good)';icon='✓';title='Correct';
+    sub=margin<.02?`Close decision. The runner-up is only ${money(margin).slice(1)} per $100 behind.`:margin<.1?`Clear choice, about ${money(margin).slice(1)} per $100 better than the next option.`:`Not close. The next option gives up ${money(margin).slice(1)} per $100.`;
+  }else{
+    const x=loss*100;
+    if(x<=2){sev='var(--close)';title='Close call, but not the best';icon='~';}
+    else if(x<=10){sev='var(--warn)';title='Mistake';icon='!';}
+    else{sev='var(--bad)';title='Costly mistake';icon='✕';}
+    if(x<=.25)title='Nearly a coin flip';
+    sub=`You chose ${ACT_NAMES[action]}. Best play: ${ACT_NAMES[dec.best]}.`;
+  }
+  if(fb.hints>0)sub+=` (${fb.hints} hint${fb.hints>1?'s':''} used${ok?', so your streak holds instead of growing':''}.)`;
+  return{sev,title,sub,icon};
+}
+function showSheet(fb){
+  const{dec,action,ok,loss}=fb;
+  const{sev,title,sub,icon}=verdictOf(fb);
+  const max=Math.max(.5,...Object.values(dec.evs).map(Math.abs));
+  const order=['hit','stand','double','split','surrender'].filter(k=>k in dec.evs);
+  const rows=order.map(k=>{
+    const v=dec.evs[k],w=Math.abs(v)/max*50,left=v<0?50-w:50;
+    const col=k===dec.best?'var(--good)':(k===action&&!ok)?'var(--bad)':'rgba(244,238,221,.35)';
+    return `<div class="evrow"><div class="nm">${ACT_NAMES[k]}${k===dec.best?' <span class="tag best">Best</span>':''}${k===action&&!ok?' <span class="tag you">You</span>':''}</div>
+      <div class="evbar"><i style="left:${left}%;width:${Math.max(w,.6)}%;background:${col}"></i></div><div class="v">${money(v)}</div></div>`;
+  }).join('');
+  const why=explain(dec);
+  if(dec.fallback==='double')why.push(`The chart says double here, but you can only double on your first two cards. The fallback is to ${dec.best}.`);
+  if(dec.fallback==='surrender')why.push(`The chart says surrender here, but surrender is only allowed on your first two cards${dec.two?' and not after a split':''}. The fallback is to ${dec.best}.`);
+  const gauge=ok?'':`<div class="gauge"><div class="cost">This choice costs <b>${money(loss).slice(1)}</b> per $100 bet compared with ${ACT_NAMES[dec.best].toLowerCase()}.</div>
+    <div class="gauge-track"><div class="gauge-mark" style="left:${gaugePos(loss)}%"></div></div>
+    <div class="gauge-ticks"><span>Trivial</span><span>Close</span><span>Mistake</span><span>Costly</span></div></div>`;
+  $('sheetHost').innerHTML=`<div class="scrim"></div><div class="sheet" role="dialog" aria-label="Feedback" style="--sev:${sev}">
+    <div class="sheet-body">
+      <div class="verdict"><div class="vbadge">${icon}</div><div><h2>${title}</h2><p>${sub}</p></div></div>
+      ${gauge}
+      <div class="why">${why.map(p=>`<p>${p}</p>`).join('')}</div>
+      <div><p class="sect">Expected result per $100 bet</p><div class="evs">${rows}</div></div>
+      <p class="note">Values assume the dealer has already checked for blackjack, and treat the shoe as an infinite deck. The chart decides the right play; the dollar values show how much is at stake.</p>
+    </div>
+    <div class="sheet-actions"><button class="btn-primary" id="closeSheet">Back to the table</button></div>
+  </div>`;
+  const close=()=>{$('sheetHost').innerHTML='';};
+  $('closeSheet').onclick=close;
+  document.querySelector('#sheetHost .scrim').onclick=close;
+  $('closeSheet').focus({preventScroll:true});
+}
+function toast(msg){const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),950);}
+
+/* Chart view */
+function renderChart(){
+  const ups=[2,3,4,5,6,7,8,9,10,11];
+  const head=`<tr><th></th>${ups.map(u=>`<th>${upShort(u)}</th>`).join('')}</tr>`;
+  const cell=(code,key)=>{const m=stats.cells[key]||0;const k=code[0];
+    const txt={H:'H',S:'S',Dh:'D',Ds:'Ds',P:'P',Rh:'R',Rs:'R',Rp:'R'}[code];
+    return `<td class="k-${k}${m?' miss':''}" ${m?`data-miss="${m}"`:''}>${txt}</td>`;};
+  const table=(title,rows)=>`<section><h3>${title}</h3><div class="dealerhead">Dealer upcard</div><div class="tblwrap"><table class="chart">${head}${rows}</table></div></section>`;
+  const hardRows=[8,9,10,11,12,13,14,15,16,17,18].map(t=>`<tr><th class="row">${t===8?'5–8':t===18?'18+':t}</th>${ups.map(u=>cell(hardCode(t,u),`hard-${t}-${u}`)).join('')}</tr>`).join('');
+  const softRows=[13,14,15,16,17,18,19,20].map(t=>`<tr><th class="row">A,${t-11}</th>${ups.map(u=>cell(softCode(t,u),`soft-${t}-${u}`)).join('')}</tr>`).join('');
+  const pairRows=[2,3,4,5,6,7,8,9,10,11].map(x=>{const n=x===11?'A':x===10?'T':x;
+    return `<tr><th class="row">${n},${n}</th>${ups.map(u=>{const p=pairCode(x,u);return cell(p||(x===11?'P':hardCode(2*x,u)),`pair-${x}-${u}`);}).join('')}</tr>`;}).join('');
+  $('chartScroll').innerHTML=`
+    <div class="legend"><span><i class="k-H"></i>H Hit</span><span><i class="k-S"></i>S Stand</span><span><i class="k-D"></i>D Double, else hit</span><span><i class="k-D"></i>Ds Double, else stand</span><span><i class="k-P"></i>P Split</span><span><i class="k-R"></i>R Surrender</span></div>
+    ${table('Hard totals',hardRows)}${table('Soft totals',softRows)}${table('Pairs',pairRows)}
+    <p class="note">Red badges count your misses on that cell. Surrender (R): if it isn't allowed (after hitting or splitting), hit 15–16, stand on 17, and split 8s.</p>`;
+}
+
+/* Stats view */
+let resetArmed=false;
+function renderStats(){
+  const acc=stats.n?Math.round(100*stats.ok/stats.n)+'%':'–';
+  const avg=stats.n?(stats.cost*100/stats.n).toFixed(2):'0.00';
+  const cat=(name,k)=>{const[n,ok]=stats.cat[k];const p=n?ok/n*100:0;
+    return `<div class="cat"><span>${name}</span><div class="meter"><i style="width:${p}%"></i></div><span class="n">${n?Math.round(p)+'% of '+n:'none yet'}</span></div>`;};
+  const miss=stats.recent.length?stats.recent.map(m=>`<div class="miss-item"><span>${m.h} vs ${m.u}: ${ACT_NAMES[m.you]} → <b>${ACT_NAMES[m.best]}</b></span><span>${money(m.loss).slice(1)}</span></div>`).join(''):'<p class="empty">No misses yet.</p>';
+  $('statsScroll').innerHTML=`
+    <div class="cards3">
+      <div class="tile"><b>${acc}</b><span>${stats.ok} of ${stats.n} right</span></div>
+      <div class="tile"><b>${stats.best}</b><span>Best streak</span></div>
+      <div class="tile"><b>$${avg}</b><span>Avg cost per decision, per $100</span></div>
+    </div>
+    <section><p class="sect">By hand type</p><div style="display:flex;flex-direction:column;gap:8px">${cat('Hard','hard')}${cat('Soft','soft')}${cat('Pairs','pair')}</div></section>
+    <section><p class="sect">Recent misses</p><div class="misslist">${miss}</div></section>
+    <button class="reset${resetArmed?' armed':''}" id="resetBtn">${resetArmed?'Tap again to erase all stats':'Reset stats'}</button>`;
+  $('resetBtn').onclick=()=>{if(!resetArmed){resetArmed=true;renderStats();setTimeout(()=>{resetArmed=false;if(!$('view-stats').hidden)renderStats();},4000);return;}
+    resetArmed=false;stats=blankStats();store.set('bsc-stats',stats);renderScore();renderStats();};
+}
+
+/* Tabs & focus */
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
+  ['train','chart','stats'].forEach(v=>$('view-'+v).hidden=v!==b.dataset.view);
+  if(b.dataset.view==='chart')renderChart();
+  if(b.dataset.view==='stats')renderStats();
+});
+function setFocus(f){settings.focus=f;store.set('bsc-settings',settings);
+  document.querySelectorAll('.focus button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.focus===f));}
+document.querySelectorAll('.focus button').forEach(b=>b.onclick=()=>{setFocus(b.dataset.focus);if(G.phase!=='feedback')newHand();});
+setFocus(settings.focus);
+renderScore();
+newHand();
+</script>
+</body>
+</html>

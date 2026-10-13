@@ -6,16 +6,18 @@ It is a trainer, not a blackjack game. There is no bankroll or betting. The poin
 
 ## Rules it teaches
 
-| Rule | Setting |
-|---|---|
-| Decks | 6 |
-| Dealer soft 17 | Hits (H17) |
-| Double after split | Allowed (DAS) |
-| Surrender | Late surrender |
-| Dealer peek | Dealer checks for blackjack before you act |
-| Blackjack payout | 3 to 2 |
+The Rules tab sets the table rules. The chart, grading, explanations, hints and the dealer's play all follow them.
 
-This is the most common shoe game in US casinos. Other rule sets change a handful of chart cells (see *Changing the rules* below).
+| Rule | Options | Default |
+|---|---|---|
+| Surrender | Late surrender / not offered | Late surrender |
+| Dealer soft 17 | Hits (H17) / stands (S17) | Hits |
+| Double after split | Allowed / not allowed | Allowed |
+| Doubling allowed on | Any two cards / 9–11 only / 10–11 only | Any two cards |
+
+**Restore defaults** returns to the default column. That is the most common shoe game in US casinos.
+
+These are fixed: 6 decks (the same chart is standard for 8 decks), the dealer peeks for blackjack before you act, blackjack pays 3 to 2, and there is no re-splitting.
 
 ## Features
 
@@ -31,16 +33,17 @@ This is the most common shoe game in US casinos. Other rule sets change a handfu
   3. Nudge: a guiding question, and which options can be ruled out
 - **Two deal modes.** *Tough spots* (the default) weights toward soft hands, pairs, and hard 12–16. *Real deals* deals cards randomly, as at a casino.
 - **Chart tab.** The full strategy chart, color-coded, with a red badge on every cell you've missed. Tap any cell to study it: you get the best play, the explanation, and the expected value of every option. A **Practice this spot** button then deals that exact situation five times in a row in the trainer.
+- **Rules tab.** Switch common table rules on and off, see how many chart cells your rules change from the defaults, and restore the defaults in one tap.
 - **Stats tab.** Accuracy overall and by hand type (hard, soft, pairs), best streak, average cost per decision, and your recent misses. A correct answer after a hint counts toward accuracy but doesn't extend your streak.
 
 ## How the grading works
 
-The **chart decides what is correct.** It is the standard 6-deck, H17, DAS, late-surrender basic strategy chart.
+The **chart decides what is correct.** It is standard 6-deck basic strategy for whichever rules are selected.
 
 The **dollar values show how much is at stake.** For every decision, the app calculates the expected value of each legal move:
 
-- Dealer outcomes are computed exactly by recursion over the dealer's drawing rules (hits soft 17), conditioned on the dealer not having blackjack. This matches what you know at the table after the dealer peeks.
-- Player values assume optimal play after each move. Split hands may double (DAS) but not re-split. Split aces get one card each.
+- Dealer outcomes are computed exactly by recursion over the dealer's drawing rules (hits or stands on soft 17, per the Rules tab), conditioned on the dealer not having blackjack. This matches what you know at the table after the dealer peeks.
+- Player values assume optimal play after each move. Split hands may double only if double after split is on, and never re-split. Split aces get one card each.
 - The shoe is treated as an **infinite deck**, so each card's probability stays fixed at 1/13 (4/13 for ten-valued cards). That is within a fraction of a dollar per $100 of exact 6-deck values. On razor-thin decisions, such as hit vs. stand on 16 vs. 10, the two values can show as a tie.
 
 A mistake's cost is the expected value of the best play minus the expected value of the move you chose.
@@ -77,30 +80,25 @@ Everything is in `index.html`, in this order:
 | Section | What it does |
 |---|---|
 | `<style>` | Design tokens on `:root` (colors, fonts), then layout and components |
-| Engine (`ENGINE START` … `ENGINE END`) | Dealer outcome recursion (`dealerFrom`, `dealerDist`), player EV functions (`evalFor`), and the strategy chart (`hardCode`, `softCode`, `pairCode`) |
+| Engine (`ENGINE START` … `ENGINE END`) | Rule settings (`DEFAULT_RULES`, `R`, `setRules`, `canDoubleTotal`), dealer outcome recursion (`dealerFrom`, `dealerDist`), player EV functions (`evalFor`), and the strategy chart (`hardCode`, `softCode`, `pairCode`) |
 | `decide()` | For the current hand, works out the legal moves, the correct move (including fallbacks when double or surrender aren't allowed), and each move's EV |
 | `explain()` | The written explanation for each situation |
 | `hintLines()` | The three hint levels |
 | Game flow | `newHand`, `advance`, `apply`, `finishHand`: dealing, playing moves, the dealer's draw, and settlement |
-| Rendering | Table, feedback banner, details sheet, chart tab, and stats tab |
+| Rendering | Table, feedback banner, details sheet, and the chart, stats and rules tabs |
 
 Chart codes used in the engine: `H` hit, `S` stand, `Dh` double (else hit), `Ds` double (else stand), `P` split, `Rh`/`Rs`/`Rp` surrender (else hit/stand/split).
 
 ## Changing the rules
 
-The chart lives in three small functions: `hardCode`, `softCode`, and `pairCode`. The dealer's soft-17 rule is the line in `dealerFrom` marked `// dealer hits soft 17`.
+Everyday changes go through the Rules tab. In code, the rules live in `R`, and `DEFAULT_RULES` is the setup that **Restore defaults** returns to. `hardCode`, `softCode` and `pairCode` read `R` to adjust the chart. For example, under S17 they make 11 vs. A a hit and drop surrender on 15 vs. A, 17 vs. A and 8,8 vs. A. A double that the rules don't allow on a total becomes its backup play: hit for `Dh`, stand for `Ds`.
 
-To switch to a dealer-stands-on-soft-17 game, change that line and update the chart cells that differ:
-- 11 vs. A: hit instead of double
-- 15 vs. A and 17 vs. A: no surrender
-- soft 18 vs. 2: stand
-- soft 19 vs. 6: stand
-- 8,8 vs. A: split
+Adding a new rule means adding it to `DEFAULT_RULES`, to `RULE_OPTS` (the Rules tab), to the chart functions, and to the EV engine wherever it changes the math.
 
 ## Testing a change
 
 There is no test suite. After editing:
 
 1. Open `index.html` in a desktop browser and check the browser console for errors.
-2. Open the Chart tab and confirm the cells match a published chart for your rules.
+2. Open the Chart tab and confirm the cells match a published chart for the selected rules. Check a few rule combinations, then tap **Restore defaults**.
 3. Play a few hands of each type: hard, soft, a pair you split, a double, and a surrender.

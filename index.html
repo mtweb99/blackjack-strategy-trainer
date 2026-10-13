@@ -47,7 +47,14 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
   box-shadow:inset 0 0 0 5px var(--gold),0 2px 6px rgba(0,0,0,.4)}
 .chip21 span{background:var(--gold);border-radius:50%;width:24px;height:24px;display:grid;place-items:center}
 h1{font-family:var(--display);font-weight:700;font-size:21px;margin:0;letter-spacing:.01em;line-height:1.1}
-.rules{margin:2px 0 0;font-size:11.5px;color:var(--muted);letter-spacing:.04em}
+.rules{margin:2px 0 0;font-size:11px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;text-wrap:balance}
+.rulegroup{display:flex;flex-direction:column;gap:8px}
+.rulegroup .sect{margin:0}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{flex:1 1 auto;border:0;padding:10px 12px;border-radius:10px;background:rgba(0,0,0,.25);font-weight:600;font-size:14px;color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.seg button small{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.7;margin-left:3px}
+.seg button[aria-pressed="true"]{background:var(--gold);color:var(--gold-ink);box-shadow:none}
+.reset[disabled]{opacity:.45;cursor:default}
 .tabs{display:flex;gap:4px;background:rgba(0,0,0,.25);border-radius:10px;padding:3px}
 .tabs button{flex:1;border:0;background:transparent;padding:7px 0;border-radius:8px;font-weight:600;font-size:13.5px;color:var(--muted)}
 .tabs button[aria-selected="true"]{background:var(--gold);color:var(--gold-ink)}
@@ -225,13 +232,14 @@ button,input,label{touch-action:manipulation}
       <div class="chip21" aria-hidden="true"><span>21</span></div>
       <div>
         <h1>Basic Strategy Coach</h1>
-        <p class="rules">6 DECKS · DEALER HITS SOFT 17 · DAS · LATE SURRENDER</p>
+        <p class="rules" id="rulesLine"></p>
       </div>
     </div>
     <nav class="tabs" role="tablist">
       <button id="tab-train" role="tab" aria-selected="true" data-view="train">Train</button>
       <button id="tab-chart" role="tab" aria-selected="false" data-view="chart">Chart</button>
       <button id="tab-stats" role="tab" aria-selected="false" data-view="stats">Stats</button>
+      <button id="tab-rules" role="tab" aria-selected="false" data-view="rules">Rules</button>
     </nav>
   </header>
 
@@ -268,6 +276,10 @@ button,input,label{touch-action:manipulation}
       <div class="scroll" id="chartScroll"></div>
     </section>
 
+    <section class="view" id="view-rules" hidden>
+      <div class="scroll" id="rulesScroll"></div>
+    </section>
+
     <section class="view" id="view-stats" hidden>
       <div class="scroll" id="statsScroll"></div>
     </section>
@@ -277,15 +289,30 @@ button,input,label{touch-action:manipulation}
 
 <script>
 /* ===== ENGINE START ===== */
+/* Rules. DEFAULT_RULES is the "restore defaults" setup: 6 decks, dealer hits soft 17,
+   double after split, late surrender, double on any two cards. */
+const DEFAULT_RULES={s17:false,das:true,surrender:true,dbl:'any'}; // dbl: 'any' | '9-11' | '10-11'
+let R={...DEFAULT_RULES};
 const VALS=[2,3,4,5,6,7,8,9,10,11];
 const PR=c=>c===10?4/13:1/13;
 function add(t,s,c){t+=c;if(c===11)s++;while(t>21&&s>0){t-=10;s--;}return [t,s];}
 const dMemo={};
+const evalCache={};
+function setRules(r){
+  R={...DEFAULT_RULES,...r};
+  for(const k in dMemo)delete dMemo[k];
+  for(const k in evalCache)delete evalCache[k];
+}
+function canDoubleTotal(t,soft){ // does the doubling rule allow doubling this two-card total?
+  if(R.dbl==='any')return true;
+  if(soft)return false;
+  return R.dbl==='9-11'?(t>=9&&t<=11):(t>=10&&t<=11);
+}
 function dealerFrom(t,s){
   const k=t+'|'+s; if(dMemo[k])return dMemo[k];
   const out=[0,0,0,0,0,0];
   if(t>21)out[5]=1;
-  else if(t>=18||(t===17&&s===0))out[t-17]=1;      // dealer hits soft 17
+  else if(t>=18||(t===17&&(s===0||R.s17)))out[t-17]=1;   // soft 17: stands only under S17
   else for(const c of VALS){const[nt,ns]=add(t,s,c);const d=dealerFrom(nt,ns);for(let i=0;i<6;i++)out[i]+=PR(c)*d[i];}
   return dMemo[k]=out;
 }
@@ -298,7 +325,6 @@ function dealerDist(up){ // conditioned on dealer having peeked and not having b
   }
   return out.map(x=>x/tot);
 }
-const evalCache={};
 function evalFor(up){
   if(evalCache[up])return evalCache[up];
   const d=dealerDist(up);
@@ -307,38 +333,48 @@ function evalFor(up){
   function V(t,s){if(t>21)return -1;const k=t+'|'+s;if(k in vm)return vm[k];return vm[k]=Math.max(standEV(t),hitEV(t,s));}
   function hitEV(t,s){const k=t+'|'+s;if(k in hm)return hm[k];let ev=0;for(const c of VALS){const[nt,ns]=add(t,s,c);ev+=PR(c)*V(nt,ns);}return hm[k]=ev;}
   function dblEV(t,s){let ev=0;for(const c of VALS){const[nt,ns]=add(t,s,c);ev+=PR(c)*standEV(nt);}return 2*ev;}
-  function splitEV(x){let ev=0;for(const c of VALS){const[t,s]=add(x,x===11?1:0,c);ev+=PR(c)*(x===11?standEV(t):Math.max(V(t,s),dblEV(t,s)));}return 2*ev;}
+  function splitEV(x){let ev=0;for(const c of VALS){const[t,s]=add(x,x===11?1:0,c);
+    ev+=PR(c)*(x===11?standEV(t):Math.max(V(t,s),(R.das&&canDoubleTotal(t,s>0))?dblEV(t,s):-Infinity));}return 2*ev;}
   return evalCache[up]={d,standEV,hitEV,dblEV,splitEV};
 }
 
-/* Chart: 6 decks, H17, DAS, late surrender */
+/* Chart: 6-deck basic strategy, adjusted for the rules in R */
+function limitDouble(code,t,soft){ // a double the rules don't allow on this total becomes its backup play
+  if(code[0]!=='D'||canDoubleTotal(t,soft))return code;
+  return code==='Dh'?'H':'S';
+}
 function hardCode(t,u){
-  if(t<=8)return 'H';
-  if(t===9)return u>=3&&u<=6?'Dh':'H';
-  if(t===10)return u<=9?'Dh':'H';
-  if(t===11)return 'Dh';
-  if(t===12)return u>=4&&u<=6?'S':'H';
-  if(t<=14)return u<=6?'S':'H';
-  if(t===15)return u<=6?'S':u>=10?'Rh':'H';
-  if(t===16)return u<=6?'S':u>=9?'Rh':'H';
-  if(t===17)return u===11?'Rs':'S';
-  return 'S';
+  let c;
+  if(t<=8)c='H';
+  else if(t===9)c=u>=3&&u<=6?'Dh':'H';
+  else if(t===10)c=u<=9?'Dh':'H';
+  else if(t===11)c=(u===11&&R.s17)?'H':'Dh';
+  else if(t===12)c=u>=4&&u<=6?'S':'H';
+  else if(t<=14)c=u<=6?'S':'H';
+  else if(t===15)c=u<=6?'S':(R.surrender&&(u===10||(u===11&&!R.s17)))?'Rh':'H';
+  else if(t===16)c=u<=6?'S':(R.surrender&&u>=9)?'Rh':'H';
+  else if(t===17)c=(R.surrender&&!R.s17&&u===11)?'Rs':'S';
+  else c='S';
+  return limitDouble(c,t,false);
 }
 function softCode(t,u){
-  if(t<=12)return 'H';
-  if(t<=14)return u===5||u===6?'Dh':'H';
-  if(t<=16)return u>=4&&u<=6?'Dh':'H';
-  if(t===17)return u>=3&&u<=6?'Dh':'H';
-  if(t===18)return u<=6?'Ds':u<=8?'S':'H';
-  if(t===19)return u===6?'Ds':'S';
-  return 'S';
+  let c;
+  if(t<=12)c='H';
+  else if(t<=14)c=u===5||u===6?'Dh':'H';
+  else if(t<=16)c=u>=4&&u<=6?'Dh':'H';
+  else if(t===17)c=u>=3&&u<=6?'Dh':'H';
+  else if(t===18)c=u<=6?((u===2&&R.s17)?'S':'Ds'):u<=8?'S':'H';
+  else if(t===19)c=(u===6&&!R.s17)?'Ds':'S';
+  else c='S';
+  return limitDouble(c,t,true);
 }
 function pairCode(x,u){ // returns 'P','Rp' or null (= play as a total)
   switch(x){
-    case 2:case 3:case 7:return u<=7?'P':null;
-    case 4:return u===5||u===6?'P':null;
-    case 6:return u<=6?'P':null;
-    case 8:return u===11?'Rp':'P';
+    case 2:case 3:return (R.das?u<=7:(u>=4&&u<=7))?'P':null;
+    case 4:return (R.das&&(u===5||u===6))?'P':null;
+    case 6:return (R.das?u<=6:(u>=3&&u<=6))?'P':null;
+    case 7:return u<=7?'P':null;
+    case 8:return (u===11&&R.surrender&&!R.s17)?'Rp':'P';
     case 9:return (u===7||u===10||u===11)?null:'P';
     case 11:return 'P';
     default:return null; // 5s and 10s never split
@@ -362,7 +398,7 @@ function decide(hand,up){
   const{t,soft}=hv(hand.cards);const s=soft?1:0;
   const two=hand.cards.length===2;
   const x0=val(hand.cards[0].r);
-  const avail={hit:true,stand:true,double:two,split:two&&!hand.fromSplit&&x0===val(hand.cards[1].r),surrender:two&&!hand.fromSplit};
+  const avail={hit:true,stand:true,double:two&&(!hand.fromSplit||R.das)&&canDoubleTotal(t,soft),split:two&&!hand.fromSplit&&x0===val(hand.cards[1].r),surrender:R.surrender&&two&&!hand.fromSplit};
   let code=avail.split?pairCode(x0,up):null;
   const totalCode=soft?softCode(t,up):hardCode(t,up);
   if(!code)code=totalCode;
@@ -381,7 +417,7 @@ function decide(hand,up){
   if(avail.split)cell=`pair-${x0}-${up}`;
   else if(soft&&t>=13&&t<=20)cell=`soft-${t}-${up}`;
   else if(!soft)cell=`hard-${t<=8?8:t>=18?18:t}-${up}`;
-  return{t,soft,two,x0,avail,code,best,fallback,evs,kind,cell,up,bust:E.d[5]};
+  return{t,soft,two,x0,avail,code,best,fallback,evs,kind,cell,up,bust:E.d[5],fromSplit:!!hand.fromSplit};
 }
 
 function handLabel(dec){
@@ -390,13 +426,16 @@ function handLabel(dec){
 }
 
 function explain(dec){
-  const u=dec.up,U=upName(u),b=Math.round(dec.bust*100),t=dec.t,weak=u<=6;
+  const u=dec.up,U=upName(u),b=Math.round(dec.bust*100),t=dec.t,weak=u<=6,c=dec.code;
   const out=[];
   const bustLine=`The dealer busts about ${b}% of the time with ${U} showing.`;
+  const h17=R.s17?'standing on':'hitting';
+  const noDbl=(tot,soft)=>!canDoubleTotal(tot,soft);
+  const dblRule=R.dbl==='9-11'?'hard 9, 10 and 11':'hard 10 and 11';
   if(dec.kind==='pair'){
     const x=dec.x0;
     if(x===11)out.push('Split aces every time. A pair of aces is a clumsy soft 12, but split, each hand starts at 11 and a ten-valued card (31% of the deck) makes 21. You only get one card on each ace, and it is still the strongest start in the game.');
-    else if(x===8)out.push(u===11?'16 is the worst total, and against an ace even split 8s are underdogs. With late surrender available, giving up half your bet loses less on average than putting two bets out against the ace.':'Split 8s every time. 16 is the worst total in blackjack, and two hands starting at 8 lose far less than one 16, even against a strong upcard.');
+    else if(x===8)out.push(c==='Rp'?'16 is the worst total, and against an ace even split 8s are underdogs. With late surrender available, giving up half your bet loses less on average than putting two bets out against the ace.':'Split 8s every time. 16 is the worst total in blackjack, and two hands starting at 8 lose far less than one 16, even against a strong upcard.');
     else if(x===10)out.push('Never split tens. 20 wins most of the time already. Splitting swaps a near-certain winner for two hands that each start at 10 and average less.');
     else if(x===5)out.push('Never split 5s. Together they make 10, one of the best doubling hands. Play it as a hard 10.');
     else if(x===9){
@@ -404,47 +443,64 @@ function explain(dec){
       else if(u>=10)out.push('18 is an underdog to a 10 or ace, but splitting makes two 9s that do even worse against that card. Stand.');
       else out.push(`Two hands starting at 9 earn more than one 18 here. ${weak?bustLine:'An 8 most often makes 18, so your 18 only pushes; two 9s each improve to 19 often enough.'}`);
     }
-    else if(x===4)out.push(dec.code==='P'?`Against a 5 or 6 the dealer is at their weakest (${b}% bust). Each 4 can draw a 5, 6 or 7 for a good double, and doubling after a split is allowed.`:'Play 4,4 as a hard 8 and hit. Two hands starting with 4 are weak and only pay off against a 5 or 6.');
+    else if(x===4)out.push(c==='P'?`Against a 5 or 6 the dealer is at their weakest (${b}% bust). Each 4 can draw a 5, 6 or 7 for a good double, and doubling after a split is allowed.`:`Play 4,4 as a hard 8 and hit. Two hands starting with 4 are weak${R.das?' and only pay off against a 5 or 6':', and without doubling after a split they never pay off'}.`);
     else{ // 2,3,6,7
-      if(dec.code==='P')out.push(`Split here. ${bustLine} Splitting puts more money out while the dealer is weak, and doubling after a split lets you press a good draw.`);
+      if(c==='P')out.push(`Split here. ${bustLine} Splitting puts more money out while the dealer is weak${R.das?', and doubling after a split lets you press a good draw':''}.`);
+      else if(!R.das&&weak)out.push(`Without doubling after a split, splitting against ${U} isn't quite worth it. Play it as a ${dec.soft?'soft':'hard'} ${t}.`);
       else out.push(`Don't split against ${U}. That upcard usually makes a strong total, so splitting just puts more money behind weak starting cards. Play it as a ${dec.soft?'soft':'hard'} ${t}.`);
     }
     return out;
   }
   if(dec.soft){
     if(t>=20)out.push(`Soft ${t} is a great hand. Stand.`);
-    else if(t===19)out.push(u===6?`Under H17 rules the dealer's 6 is weak enough (${b}% bust) that doubling soft 19 earns slightly more than standing. This one is close.`:'Soft 19 is a strong total. Stand.');
+    else if(t===19){
+      if(c==='Ds')out.push(`With the dealer hitting soft 17, a 6 is weak enough (${b}% bust) that doubling soft 19 earns slightly more than standing. This one is close.`);
+      else out.push('Soft 19 is a strong total. Stand.');
+    }
     else if(t===18){
-      if(u<=6)out.push(`Soft 18 is decent, and the dealer is weak (${b}% bust). Doubling gets more money out with no risk of busting on one card.`);
+      if(c==='Ds')out.push(`Soft 18 is decent, and the dealer is weak (${b}% bust). Doubling gets more money out with no risk of busting on one card.`);
+      else if(u<=6&&noDbl(18,true))out.push(`Normally you'd double soft 18 here, but this game only allows doubling on ${dblRule}. 18 is good enough to stand on.`);
+      else if(u===2)out.push(`With the dealer standing on soft 17, a 2 isn't weak enough to double into. Your 18 is a fair hand; stand.`);
       else if(u<=8)out.push(`Against ${U}, your 18 beats or ties the dealer's most likely finish. Stand.`);
       else out.push(`Soft 18 is an underdog to ${U}. Because a soft hand can't bust on one card, hitting to improve costs you very little.`);
     }else{
-      if(dec.code[0]==='D')out.push(`${bustLine} A soft ${t} can't bust on one card and many draws make 18 to 21, so this is a cheap chance to double.`);
+      if(c[0]==='D')out.push(`${bustLine} A soft ${t} can't bust on one card and many draws make 18 to 21, so this is a cheap chance to double.`);
+      else if(noDbl(t,true)&&softCodeIgnoringLimits(t,u)[0]==='D')out.push(`Normally you'd double soft ${t} against ${U}, but this game only allows doubling on ${dblRule}. Hit instead; the next card can't bust you.`);
       else out.push(`Soft ${t} won't win by standing. Hit; the ace drops to 1 if needed, so the next card can't bust you.`);
     }
   }else{
+    const restricted=(dec.two&&noDbl(t,false)&&t>=9&&t<=11);
     if(t<=8)out.push(`Nothing can bust a ${t}, and standing on it almost always loses. Always hit.`);
-    else if(t===9)out.push(dec.code==='Dh'?`${bustLine} A 9 that catches a ten makes 19, so double while the dealer is weak.`:`9 isn't strong enough to double against ${U}. Take a card.`);
-    else if(t===10)out.push(u<=9?`Any ten-valued card (31% of the deck) gives you 20. You're the favorite against ${U}, so double.`:`Against ${U} the dealer is too strong to double a 10. Hit.`);
-    else if(t===11)out.push(`11 is the best doubling hand: a ten-valued card makes 21. With the dealer hitting soft 17, you double even against an ace.`);
+    else if(t===9)out.push(c==='Dh'?`${bustLine} A 9 that catches a ten makes 19, so double while the dealer is weak.`:
+      (restricted&&u>=3&&u<=6)?`This game only allows doubling on ${dblRule}, so take a card.`:`9 isn't strong enough to double against ${U}. Take a card.`);
+    else if(t===10)out.push(c==='Dh'?`Any ten-valued card (31% of the deck) gives you 20. You're the favorite against ${U}, so double.`:
+      (restricted&&u<=9)?`This game only allows doubling on ${dblRule}, so take a card.`:`Against ${U} the dealer is too strong to double a 10. Hit.`);
+    else if(t===11){
+      if(c==='Dh')out.push(`11 is the best doubling hand: a ten-valued card makes 21.${u===11?' With the dealer hitting soft 17, you double even against an ace.':''}`);
+      else out.push(u===11?'With the dealer standing on soft 17, an ace is just strong enough that hitting 11 edges out doubling. This one is close.':'Take a card. 11 is a strong start.');
+    }
     else if(t>=17){
-      if(dec.code==='Rs')out.push(`Because the dealer hits soft 17, an ace showing is strong enough that 17 loses more than half your bet on average. Surrender.`);
+      if(c==='Rs')out.push(`Because the dealer hits soft 17, an ace showing is strong enough that 17 loses more than half your bet on average. Surrender.`);
       else out.push(`Stand. Hitting ${t} busts far more often than it helps.`);
     }else{ // 12-16
-      if(dec.code[0]==='R')out.push(`This is one of the worst spots in blackjack. Even the best play loses more than half your bet on average, so surrendering for a fixed half-bet loss is cheaper.`);
+      if(c[0]==='R')out.push(`This is one of the worst spots in blackjack. Even the best play loses more than half your bet on average, so surrendering for a fixed half-bet loss is cheaper.`);
       else if(t===12&&(u===2||u===3))out.push(`The dealer busts only about ${b}% with ${U} showing. A 12 busts only on a ten-valued card (31%), so taking one card is slightly better. This is a close one.`);
       else if(weak)out.push(`${bustLine} Your ${t} busts too often if you hit, so stand and let the dealer take the risk.`);
       else out.push(`${U[0].toUpperCase()+U.slice(1)} usually ends on 17 or better. A stiff ${t} only wins when the dealer busts (${b}%), so you have to try to improve even though hitting can bust you.`);
+      if(t===16&&u===10&&c==='H')out.push('This is a true coin flip: standing loses almost exactly as much as hitting. Hitting is the textbook play.');
     }
   }
   return out;
 }
+function softCodeIgnoringLimits(t,u){const save=R.dbl;R.dbl='any';const c=softCode(t,u);R.dbl=save;return c;}
 
 /* ===== State ===== */
 const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}};
 const blankStats=()=>({n:0,ok:0,streak:0,best:0,cost:0,cat:{hard:[0,0],soft:[0,0],pair:[0,0]},cells:{},recent:[]});
 let stats=store.get('bsc-stats',blankStats());
-let settings=store.get('bsc-settings',{focus:'tough',pauseOnCorrect:true});
+let settings=store.get('bsc-settings',{focus:'tough'});
+settings.rules={...DEFAULT_RULES,...(settings.rules||{})};
+setRules(settings.rules);
 let G=null;
 
 function genPlayer(){
@@ -574,7 +630,7 @@ function apply(action){
 }
 function finishHand(){
   const live=G.hands.some(h=>!h.surrendered&&hv(h.cards).t<=21);
-  if(live){for(;;){const d=hv(G.dealer);if(d.t>17||(d.t===17&&!d.soft))break;G.dealer.push(randCard());}}
+  if(live){for(;;){const d=hv(G.dealer);if(d.t>17||(d.t===17&&(!d.soft||R.s17)))break;G.dealer.push(randCard());}}
   const dt=hv(G.dealer).t;let net=0;
   for(const h of G.hands){
     const t=hv(h.cards).t;
@@ -743,7 +799,7 @@ function showSheet(fb){
       <div class="evbar"><i style="left:${left}%;width:${Math.max(w,.6)}%;background:${col}"></i></div><div class="v">${money(v)}</div></div>`;
   }).join('');
   const why=explain(dec);
-  if(dec.fallback==='double')why.push(`The chart says double here, but you can only double on your first two cards. The fallback is to ${dec.best}.`);
+  if(dec.fallback==='double')why.push(dec.fromSplit&&dec.two&&!R.das?`The chart says double here, but this game doesn't allow doubling after a split. The fallback is to ${dec.best}.`:`The chart says double here, but you can only double on your first two cards. The fallback is to ${dec.best}.`);
   if(dec.fallback==='surrender')why.push(`The chart says surrender here, but surrender is only allowed on your first two cards${dec.two?' and not after a split':''}. The fallback is to ${dec.best}.`);
   const gauge=ok?'':`<div class="gauge"><div class="cost">This choice costs <b>${money(loss).slice(1)}</b> per $100 bet compared with ${ACT_NAMES[dec.best].toLowerCase()}.</div>
     <div class="gauge-track"><div class="gauge-mark" style="left:${gaugePos(loss)}%"></div></div>
@@ -779,9 +835,10 @@ function renderChart(){
   const pairRows=[2,3,4,5,6,7,8,9,10,11].map(x=>{const n=x===11?'A':x===10?'T':x;
     return `<tr><th class="row">${n},${n}</th>${ups.map(u=>{const p=pairCode(x,u);return cell(p||(x===11?'P':hardCode(2*x,u)),`pair-${x}-${u}`);}).join('')}</tr>`;}).join('');
   $('chartScroll').innerHTML=`
-    <div class="legend"><span><i class="k-H"></i>H Hit</span><span><i class="k-S"></i>S Stand</span><span><i class="k-D"></i>D Double, else hit</span><span><i class="k-D"></i>Ds Double, else stand</span><span><i class="k-P"></i>P Split</span><span><i class="k-R"></i>R Surrender</span></div>
+    <div class="legend"><span><i class="k-H"></i>H Hit</span><span><i class="k-S"></i>S Stand</span><span><i class="k-D"></i>D Double, else hit</span><span><i class="k-D"></i>Ds Double, else stand</span><span><i class="k-P"></i>P Split</span>${R.surrender?'<span><i class="k-R"></i>R Surrender</span>':''}</div>
+    <p class="note">Chart for: ${rulesText()}. Change the rules on the Rules tab.</p>
     ${table('Hard totals',hardRows)}${table('Soft totals',softRows)}${table('Pairs',pairRows)}
-    <p class="note">Tap any cell to study it. Red badges count your misses on that cell. Surrender (R): if it isn't allowed (after hitting or splitting), hit 15–16, stand on 17, and split 8s.</p>`;
+    <p class="note">Tap any cell to study it. Red badges count your misses on that cell.${R.surrender?" Surrender (R): if it isn't allowed (after hitting or splitting), hit 15–16, stand on 17, and split 8s.":''}</p>`;
 }
 
 function openCell(td){
@@ -812,10 +869,64 @@ function renderStats(){
     resetArmed=false;stats=blankStats();store.set('bsc-stats',stats);renderScore();renderStats();};
 }
 
+/* Rules view */
+const RULE_OPTS=[
+  {key:'surrender',label:'Surrender',help:'Late surrender lets you give up half your bet on your first two cards, after the dealer checks for blackjack. Turn it off to learn the backup plays instead.',
+    opts:[[true,'Late surrender'],[false,'Not offered']]},
+  {key:'s17',label:'Dealer soft 17',help:'Whether the dealer must hit a soft 17 (such as A,6). The table felt usually says which.',
+    opts:[[false,'Hits (H17)'],[true,'Stands (S17)']]},
+  {key:'das',label:'Double after split',help:'Whether you can double a hand that came from a split. This decides how often small pairs are worth splitting.',
+    opts:[[true,'Allowed'],[false,'Not allowed']]},
+  {key:'dbl',label:'Doubling allowed on',help:'Some tables only let you double certain hard totals. Soft doubles are then not allowed.',
+    opts:[['any','Any two cards'],['9-11','9, 10, 11 only'],['10-11','10, 11 only']]},
+];
+function rulesText(){
+  const parts=['6 decks',R.s17?'dealer stands on soft 17':'dealer hits soft 17',R.das?'double after split':'no double after split'];
+  if(R.dbl!=='any')parts.push(R.dbl==='9-11'?'double on 9–11 only':'double on 10–11 only');
+  parts.push(R.surrender?'late surrender':'no surrender');
+  return parts.join(' · ');
+}
+const isDefaultRules=()=>Object.keys(DEFAULT_RULES).every(k=>R[k]===DEFAULT_RULES[k]);
+function chartSnapshot(){
+  const ups=[2,3,4,5,6,7,8,9,10,11],out=[];
+  for(const u of ups){
+    for(let t=8;t<=18;t++)out.push(hardCode(t,u));
+    for(let t=13;t<=20;t++)out.push(softCode(t,u));
+    for(const x of [2,3,4,5,6,7,8,9,10,11])out.push(pairCode(x,u)||(x===11?'P':hardCode(2*x,u)));
+  }
+  return out;
+}
+function cellsChanged(){
+  const cur=chartSnapshot();const save=R;R={...DEFAULT_RULES};const def=chartSnapshot();R=save;
+  return cur.filter((c,i)=>c!==def[i]).length;
+}
+function applyRules(r){
+  settings.rules={...DEFAULT_RULES,...r};store.set('bsc-settings',settings);
+  setRules(settings.rules);
+  $('rulesLine').textContent=rulesText();
+  PRACTICE=null;LAST=null;newHand();renderRules();
+}
+function renderRules(){
+  const n=cellsChanged();
+  $('rulesScroll').innerHTML=`
+    ${RULE_OPTS.map(g=>`<section class="rulegroup"><p class="sect">${g.label}</p>
+      <div class="seg" role="group" aria-label="${g.label}">${g.opts.map(([v,l])=>
+        `<button data-key="${g.key}" data-v='${JSON.stringify(v)}' aria-pressed="${R[g.key]===v}">${l}${DEFAULT_RULES[g.key]===v?' <small>default</small>':''}</button>`).join('')}</div>
+      <p class="note">${g.help}</p></section>`).join('')}
+    <div class="setting"><span>${isDefaultRules()?'Using the default rules.':`<b>${n}</b> chart cell${n===1?'':'s'} differ from the default rules.`}
+      <small>The chart, grading, hints and the dealer's play all follow these rules. Deck count stays at 6; the same chart is standard for 8 decks.</small></span></div>
+    <button class="reset" id="restoreRules" ${isDefaultRules()?'disabled':''}>Restore defaults (H17 · DAS · late surrender · double any two)</button>`;
+  $('rulesScroll').querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{
+    const v=JSON.parse(b.dataset.v);if(R[b.dataset.key]===v)return;applyRules({...R,[b.dataset.key]:v});});
+  $('restoreRules').onclick=()=>applyRules({...DEFAULT_RULES});
+}
+$('rulesLine').textContent=rulesText();
+
 /* Tabs & focus */
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
-  ['train','chart','stats'].forEach(v=>$('view-'+v).hidden=v!==b.dataset.view);
+  ['train','chart','stats','rules'].forEach(v=>$('view-'+v).hidden=v!==b.dataset.view);
+  if(b.dataset.view==='rules')renderRules();
   if(b.dataset.view==='chart')renderChart();
   if(b.dataset.view==='stats')renderStats();
 });

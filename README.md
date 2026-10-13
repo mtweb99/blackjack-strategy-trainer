@@ -30,7 +30,7 @@ This is the most common shoe game in US casinos. Other rule sets change a handfu
   2. Key facts: the dealer's bust rate, and your own chance of busting if you hit
   3. Nudge: a guiding question, and which options can be ruled out
 - **Two deal modes.** *Tough spots* (the default) weights toward soft hands, pairs, and hard 12–16. *Real deals* deals cards randomly, as at a casino.
-- **Chart tab.** The full strategy chart, color-coded, with a red badge on every cell you've missed.
+- **Chart tab.** The full strategy chart, color-coded, with a red badge on every cell you've missed. Tap any cell to study it: you get the best play, the explanation, and the expected value of every option. A **Practice this spot** button then deals that exact situation five times in a row in the trainer.
 - **Stats tab.** Accuracy overall and by hand type (hard, soft, pairs), best streak, average cost per decision, and your recent misses. A correct answer after a hint counts toward accuracy but doesn't extend your streak.
 
 ## How the grading works

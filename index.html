@@ -171,6 +171,16 @@ table.chart{border-collapse:separate;border-spacing:2px;width:100%;font-variant-
 .chart td{text-align:center;font-size:11.5px;font-weight:700;color:#141414;padding:5px 0;border-radius:3px;position:relative;min-width:24px}
 .chart td.miss::after{content:attr(data-miss);position:absolute;top:-4px;right:-3px;background:var(--bad);color:#fff;font-size:9px;
   min-width:13px;height:13px;border-radius:7px;display:grid;place-items:center;padding:0 2px;box-shadow:0 0 0 1px var(--felt)}
+.chart td[data-k]{cursor:pointer;transition:filter .1s,transform .1s}
+.chart td[data-k]:active{filter:brightness(1.2);transform:scale(.94)}
+.study-hand{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:rgba(0,0,0,.25);border-radius:12px;padding:10px 12px}
+.study-hand .cards{--cw:40px;min-height:0}
+.study-hand .vs{font-size:12px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;font-weight:700}
+.playchip{display:inline-block;padding:3px 10px;border-radius:999px;color:#141414;font-weight:800;font-size:15px}
+.practice{margin:8px 16px 0;display:flex;align-items:center;gap:10px;background:rgba(217,180,95,.12);box-shadow:inset 0 0 0 1px rgba(217,180,95,.45);
+  border-radius:10px;padding:7px 10px;font-size:13px}
+.practice b{color:var(--gold)}
+.practice button{margin-left:auto;border:0;background:transparent;color:var(--muted);font-weight:700;font-size:12.5px;text-decoration:underline}
 .k-H{background:var(--c-hit)}.k-S{background:var(--c-stand)}.k-D{background:var(--c-double)}.k-P{background:var(--c-split)}.k-R{background:var(--c-surr)}
 h3{font-family:var(--display);font-size:18px;margin:0 0 6px}
 .dealerhead{font-size:11px;color:var(--muted);text-align:center;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px}
@@ -235,6 +245,7 @@ button,input,label{touch-action:manipulation}
           <button id="f-tough" data-focus="tough" aria-pressed="true">Tough spots</button>
         </div>
       </div>
+      <div class="practice" id="practiceBar" hidden></div>
       <div class="table">
         <div class="seat">
           <div class="label">Dealer</div>
@@ -448,11 +459,93 @@ function genPlayer(){
 }
 function shuffle(a){if(Math.random()<.5)a.reverse();return a;}
 
+/* Practice a single chart cell: spec = {kind:'hard'|'soft'|'pair', t, up} */
+let PRACTICE=null;
+const PRACTICE_HANDS=5;
+function practiceCards(p){
+  if(p.kind==='pair')return [cardOf(p.t),cardOf(p.t)];
+  if(p.kind==='soft')return shuffle([cardOf(11),cardOf(p.t-11)]);
+  const lo=p.t===8?5:p.t,hi=p.t===8?8:p.t===18?20:p.t;
+  for(;;){const a=2+rnd(9),b=2+rnd(9);if(a!==b&&a+b>=lo&&a+b<=hi)return [cardOf(a),cardOf(b)];}
+}
+function cellTitle(p){
+  if(p.kind==='pair'){const n=p.t===11?'A':p.t===10?'10':p.t;return `Pair of ${n}s`;}
+  if(p.kind==='soft')return `Soft ${p.t} (A,${p.t-11})`;
+  return 'Hard '+(p.t===8?'5–8':p.t===18?'18+':p.t);
+}
+function renderPracticeBar(){
+  const el=$('practiceBar');
+  if(!PRACTICE){el.hidden=true;return;}
+  el.hidden=false;
+  el.innerHTML=`<span>Practicing <b>${cellTitle(PRACTICE)} vs ${upShort(PRACTICE.up)}</b> · hand ${PRACTICE.done} of ${PRACTICE_HANDS}</span><button id="stopPractice">Stop</button>`;
+  $('stopPractice').onclick=()=>{PRACTICE=null;renderPracticeBar();if(G.phase!=='decide'||G.hands[0].cards.length===2)newHand();};
+}
+function startPractice(p){
+  $('sheetHost').innerHTML='';
+  PRACTICE={...p,done:0};
+  document.querySelector('.tabs button[data-view="train"]').click();
+  newHand();
+}
 function newHand(){
-  const up=randCard();const u=val(up.r);
+  if(PRACTICE&&PRACTICE.done>=PRACTICE_HANDS){PRACTICE=null;toast('Practice set done');}
+  let up,cards;
+  if(PRACTICE){PRACTICE.done++;up=cardOf(PRACTICE.up);cards=practiceCards(PRACTICE);}
+  else{up=randCard();cards=genPlayer();}
+  const u=val(up.r);
   let hole;do{hole=randCard();}while((u===11&&val(hole.r)===10)||(u===10&&val(hole.r)===11));
-  G={up,hole,dealer:[up,hole],hands:[{cards:genPlayer(),done:false,bet:1,fromSplit:false}],active:0,phase:'decide',dec:null};
+  G={up,hole,dealer:[up,hole],hands:[{cards,done:false,bet:1,fromSplit:false}],active:0,phase:'decide',dec:null};
+  renderPracticeBar();
   advance();
+}
+
+/* Study sheet for a chart cell */
+function exampleCards(p){
+  if(p.kind==='pair')return [cardOf(p.t),cardOf(p.t)];
+  if(p.kind==='soft')return [{r:'A',s:'♠'},cardOf(p.t-11)];
+  const ex={8:[5,3],9:[6,3],10:[6,4],11:[7,4],12:[10,2],13:[10,3],14:[10,4],15:[10,5],16:[10,6],17:[10,7],18:[10,8]}[p.t];
+  return [{r:ex[0]===10?'K':String(ex[0]),s:'♠'},{r:String(ex[1]),s:'♥'}];
+}
+function evRowsHTML(dec){
+  const max=Math.max(.5,...Object.values(dec.evs).map(Math.abs));
+  return ['hit','stand','double','split','surrender'].filter(k=>k in dec.evs).map(k=>{
+    const v=dec.evs[k],w=Math.abs(v)/max*50,left=v<0?50-w:50;
+    const col=k===dec.best?'var(--good)':'rgba(244,238,221,.35)';
+    return `<div class="evrow"><div class="nm">${ACT_NAMES[k]}${k===dec.best?' <span class="tag best">Best</span>':''}</div>
+      <div class="evbar"><i style="left:${left}%;width:${Math.max(w,.6)}%;background:${col}"></i></div><div class="v">${money(v)}</div></div>`;
+  }).join('');
+}
+function showStudy(p){
+  const cards=exampleCards(p);
+  const dec=decide({cards,fromSplit:false},p.up);
+  const m=marginOf(dec)*100;
+  const diff=m<2?['var(--close)','Tough spot',`The runner-up is only $${m.toFixed(2)} per $100 behind.`]:
+    m<10?['var(--warn)','Moderate',`The best play is about $${m.toFixed(1)} per $100 better than the next option.`]:
+    ['var(--good)','Easy call',`Every other option gives up at least $${m.toFixed(0)} per $100.`];
+  const actColor={hit:'--c-hit',stand:'--c-stand',double:'--c-double',split:'--c-split',surrender:'--c-surr'}[dec.best];
+  const why=explain(dec);
+  const notes=[];
+  if(p.kind==='hard'&&(p.t===8||p.t===18))notes.push(`Every total in the ${p.t===8?'5–8':'18+'} row plays the same way. The example shows ${p.t}.`);
+  else if(p.kind==='hard')notes.push(`This applies to any two-card hard ${p.t} that isn't a pair.`);
+  const c=dec.code;
+  if(c[0]==='D')notes.push(`Doubling is only allowed on your first two cards. With three or more cards, ${c==='Dh'?'hit':'stand'} instead.`);
+  if(c[0]==='R')notes.push(`Surrender is only allowed on your first two cards, and not after a split. Otherwise ${{h:'hit',s:'stand',p:'split'}[c[1]]}.`);
+  $('sheetHost').innerHTML=`<div class="scrim"></div><div class="sheet" role="dialog" aria-label="Study this spot" style="--sev:var(${actColor})">
+    <div class="sheet-body">
+      <div class="verdict"><div><h2>${cellTitle(p)} vs dealer ${upShort(p.up)}</h2>
+        <p>Best play: <span class="playchip" style="background:var(${actColor})">${ACT_NAMES[dec.best]}</span></p></div></div>
+      <div class="study-hand"><div class="cards">${cards.map(c=>cardHTML(c)).join('')}</div><span class="vs">vs</span><div class="cards">${cardHTML(cardOf(p.up))}</div>
+        <span style="font-size:13px"><b style="color:${diff[0]}">${diff[1]}.</b> <span style="color:var(--muted)">${diff[2]}</span></span></div>
+      <div class="why">${why.map(x=>`<p>${x}</p>`).join('')}</div>
+      <div><p class="sect">Expected result per $100 bet</p><div class="evs">${evRowsHTML(dec)}</div></div>
+      ${notes.length?`<p class="note">${notes.join(' ')}</p>`:''}
+    </div>
+    <div class="sheet-actions"><button class="btn-ghost" id="closeStudy">Close</button><button class="btn-primary" id="practiceSpot">Practice this spot</button></div>
+  </div>`;
+  const close=()=>{$('sheetHost').innerHTML='';};
+  $('closeStudy').onclick=close;
+  document.querySelector('#sheetHost .scrim').onclick=close;
+  $('practiceSpot').onclick=()=>startPractice(p);
+  $('practiceSpot').focus({preventScroll:true});
 }
 function advance(){
   // find next hand needing a decision
@@ -678,7 +771,8 @@ function renderChart(){
   const head=`<tr><th></th>${ups.map(u=>`<th>${upShort(u)}</th>`).join('')}</tr>`;
   const cell=(code,key)=>{const m=stats.cells[key]||0;const k=code[0];
     const txt={H:'H',S:'S',Dh:'D',Ds:'Ds',P:'P',Rh:'R',Rs:'R',Rp:'R'}[code];
-    return `<td class="k-${k}${m?' miss':''}" ${m?`data-miss="${m}"`:''}>${txt}</td>`;};
+    const [kind,t,u]=key.split('-');
+    return `<td class="k-${k}${m?' miss':''}" ${m?`data-miss="${m}"`:''} data-k="${kind}|${t}|${u}" role="button" tabindex="0" aria-label="Study ${kind} ${t} versus ${u}">${txt}</td>`;};
   const table=(title,rows)=>`<section><h3>${title}</h3><div class="dealerhead">Dealer upcard</div><div class="tblwrap"><table class="chart">${head}${rows}</table></div></section>`;
   const hardRows=[8,9,10,11,12,13,14,15,16,17,18].map(t=>`<tr><th class="row">${t===8?'5–8':t===18?'18+':t}</th>${ups.map(u=>cell(hardCode(t,u),`hard-${t}-${u}`)).join('')}</tr>`).join('');
   const softRows=[13,14,15,16,17,18,19,20].map(t=>`<tr><th class="row">A,${t-11}</th>${ups.map(u=>cell(softCode(t,u),`soft-${t}-${u}`)).join('')}</tr>`).join('');
@@ -687,8 +781,15 @@ function renderChart(){
   $('chartScroll').innerHTML=`
     <div class="legend"><span><i class="k-H"></i>H Hit</span><span><i class="k-S"></i>S Stand</span><span><i class="k-D"></i>D Double, else hit</span><span><i class="k-D"></i>Ds Double, else stand</span><span><i class="k-P"></i>P Split</span><span><i class="k-R"></i>R Surrender</span></div>
     ${table('Hard totals',hardRows)}${table('Soft totals',softRows)}${table('Pairs',pairRows)}
-    <p class="note">Red badges count your misses on that cell. Surrender (R): if it isn't allowed (after hitting or splitting), hit 15–16, stand on 17, and split 8s.</p>`;
+    <p class="note">Tap any cell to study it. Red badges count your misses on that cell. Surrender (R): if it isn't allowed (after hitting or splitting), hit 15–16, stand on 17, and split 8s.</p>`;
 }
+
+function openCell(td){
+  const [kind,t,u]=td.dataset.k.split('|');
+  showStudy({kind,t:+t,up:+u});
+}
+$('chartScroll').addEventListener('click',e=>{const td=e.target.closest('td[data-k]');if(td)openCell(td);});
+$('chartScroll').addEventListener('keydown',e=>{const td=e.target.closest('td[data-k]');if(td&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openCell(td);}});
 
 /* Stats view */
 let resetArmed=false;

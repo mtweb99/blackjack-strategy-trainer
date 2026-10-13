@@ -22,7 +22,8 @@ These are fixed: 6 decks (the same chart is standard for 8 decks), the dealer pe
 ## Features
 
 - **Full hands, not just the first decision.** Hands play out to the end: hitting, doubling, splitting into two hands, surrender, then the dealer draws and each hand is settled.
-- **Instant feedback banner.** Every move plays immediately. A color-coded banner above the buttons shows whether you were right and what a mistake cost, so you can drill quickly. Tap it for the full breakdown.
+- **Instant feedback banner.** Every move plays immediately. A color-coded banner at the top of the screen shows whether you were right and what a mistake cost, so you can drill quickly. It stays visible on the Chart tab too. Tap it for the full breakdown.
+- **Sheet tabs along the bottom.** Train, Chart, Stats and Rules sit at the bottom edge like workbook tabs, so you can flip to the chart mid-hand and come back. The hand in progress waits for you.
 - **Full breakdown on demand:**
   - a plain-English explanation of why the correct play is correct, using live numbers such as the dealer's bust rate for that upcard
   - the expected value of every available move, in dollars per $100 bet
@@ -85,7 +86,7 @@ Everything is in `index.html`, in this order:
 | `explain()` | The written explanation for each situation |
 | `hintLines()` | The three hint levels |
 | Game flow | `newHand`, `advance`, `apply`, `finishHand`: dealing, playing moves, the dealer's draw, and settlement |
-| Rendering | Table, feedback banner, details sheet, and the chart, stats and rules tabs |
+| Rendering | Table, feedback banner (top), sheet tabs (bottom), details sheet, and the chart, stats and rules views |
 
 Chart codes used in the engine: `H` hit, `S` stand, `Dh` double (else hit), `Ds` double (else stand), `P` split, `Rh`/`Rs`/`Rp` surrender (else hit/stand/split).
 

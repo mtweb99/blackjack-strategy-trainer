@@ -55,9 +55,13 @@ h1{font-family:var(--display);font-weight:700;font-size:21px;margin:0;letter-spa
 .seg button small{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.7;margin-left:3px}
 .seg button[aria-pressed="true"]{background:var(--gold);color:var(--gold-ink);box-shadow:none}
 .reset[disabled]{opacity:.45;cursor:default}
-.tabs{display:flex;gap:4px;background:rgba(0,0,0,.25);border-radius:10px;padding:3px}
-.tabs button{flex:1;border:0;background:transparent;padding:7px 0;border-radius:8px;font-weight:600;font-size:13.5px;color:var(--muted)}
-.tabs button[aria-selected="true"]{background:var(--gold);color:var(--gold-ink)}
+/* Sheet tabs along the bottom edge, like a workbook: the active tab hangs down from the felt */
+.tabs{flex:none;display:flex;gap:3px;padding:0 10px calc(8px + env(safe-area-inset-bottom,0px));
+  background:var(--felt-deep);box-shadow:inset 0 1px 0 rgba(217,180,95,.35)}
+.tabs button{flex:1;border:0;background:rgba(255,255,255,.04);padding:9px 0 10px;border-radius:0 0 9px 9px;
+  font-weight:600;font-size:13.5px;color:var(--muted);box-shadow:inset 0 -1px 0 var(--line),inset 1px 0 0 var(--line),inset -1px 0 0 var(--line)}
+.tabs button[aria-selected="true"]{background:var(--felt);color:var(--gold);font-weight:700;
+  box-shadow:inset 0 -3px 0 var(--gold),inset 1px 0 0 rgba(217,180,95,.35),inset -1px 0 0 rgba(217,180,95,.35);margin-top:-1px}
 
 main{flex:1;min-height:0;display:flex;flex-direction:column}
 .view{flex:1;min-height:0;display:flex;flex-direction:column}
@@ -98,7 +102,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column}
 
 .prompt{text-align:center;padding:4px 16px 8px;font-size:14px;color:var(--muted);min-height:2.4em;text-wrap:balance}
 .prompt strong{color:var(--ink);font-size:16px}
-.fbwrap{padding:0 16px 6px;min-height:60px;display:flex}
+.fbwrap{min-height:52px;display:flex}
 .fb{flex:1;min-width:0;display:flex;align-items:center;gap:10px;border:0;text-align:left;border-radius:12px;padding:8px 10px;
   background:color-mix(in srgb, var(--sev) 18%, rgba(0,0,0,.35));box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--sev) 45%, transparent);
   animation:fbin .25s ease-out both}
@@ -119,7 +123,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column}
 .hintbox p{margin:0;display:flex;gap:8px}
 .hintbox p b.lv{flex:none;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold-ink);background:var(--gold);border-radius:4px;padding:2px 5px;height:fit-content;margin-top:2px}
 .diff{font-weight:700}
-.actions{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:10px 16px calc(14px + env(safe-area-inset-bottom,0px));
+.actions{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:10px 16px 12px;
   background:linear-gradient(to bottom, transparent, rgba(0,0,0,.35));}
 .act{grid-column:span 2;border:0;border-radius:12px;padding:13px 4px;font-weight:700;font-size:15px;color:#141414;
   box-shadow:0 3px 0 rgba(0,0,0,.35);transition:transform .08s}
@@ -167,7 +171,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column}
 .btn-ghost{background:transparent;box-shadow:inset 0 0 0 1px var(--line)}
 
 /* Chart */
-.scroll{flex:1;min-height:0;overflow-y:auto;padding:14px 16px calc(24px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:18px}
+.scroll{flex:1;min-height:0;overflow-y:auto;padding:14px 16px 24px;display:flex;flex-direction:column;gap:18px}
 .legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--muted)}
 .legend span{display:flex;align-items:center;gap:5px}
 .legend i{width:14px;height:14px;border-radius:3px;display:inline-block}
@@ -235,12 +239,7 @@ button,input,label{touch-action:manipulation}
         <p class="rules" id="rulesLine"></p>
       </div>
     </div>
-    <nav class="tabs" role="tablist">
-      <button id="tab-train" role="tab" aria-selected="true" data-view="train">Train</button>
-      <button id="tab-chart" role="tab" aria-selected="false" data-view="chart">Chart</button>
-      <button id="tab-stats" role="tab" aria-selected="false" data-view="stats">Stats</button>
-      <button id="tab-rules" role="tab" aria-selected="false" data-view="rules">Rules</button>
-    </nav>
+    <div class="fbwrap" id="fb"></div>
   </header>
 
   <main>
@@ -266,7 +265,6 @@ button,input,label{touch-action:manipulation}
           <div class="label">You</div>
         </div>
       </div>
-      <div class="fbwrap" id="fb"></div>
       <div class="prompt" id="prompt"></div>
       <div class="hintwrap" id="hintWrap"></div>
       <div class="actions" id="actions"></div>
@@ -284,6 +282,13 @@ button,input,label{touch-action:manipulation}
       <div class="scroll" id="statsScroll"></div>
     </section>
   </main>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button id="tab-train" role="tab" aria-selected="true" data-view="train">Train</button>
+    <button id="tab-chart" role="tab" aria-selected="false" data-view="chart">Chart</button>
+    <button id="tab-stats" role="tab" aria-selected="false" data-view="stats">Stats</button>
+    <button id="tab-rules" role="tab" aria-selected="false" data-view="rules">Rules</button>
+  </nav>
 </div>
 <div id="sheetHost"></div>
 
@@ -926,6 +931,7 @@ $('rulesLine').textContent=rulesText();
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
   ['train','chart','stats','rules'].forEach(v=>$('view-'+v).hidden=v!==b.dataset.view);
+  $('fb').hidden=!(b.dataset.view==='train'||b.dataset.view==='chart');
   if(b.dataset.view==='rules')renderRules();
   if(b.dataset.view==='chart')renderChart();
   if(b.dataset.view==='stats')renderStats();
